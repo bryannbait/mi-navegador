@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+
+# Datos personales: no subirlos a git
+historial.json
+favoritos.json
+descargas.json
