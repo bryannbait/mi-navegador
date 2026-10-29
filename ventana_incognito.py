@@ -1,6 +1,5 @@
 # ventana_incognito.py
-# Ventana incógnita. Usa perfil off-the-record y modelos SOLO en memoria:
-# no lee ni escribe tu historial, favoritos ni descargas reales.
+# Ventana incógnita. Usa perfil off-the-record, sin acceso a modelos reales.
 
 from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtWidgets import QApplication
@@ -8,15 +7,12 @@ from PyQt6.QtWidgets import QApplication
 from bloqueador import Bloqueador
 from navegador import MiNavegador
 from puente_vim import crear_script_vim
-from historial import Historial
-from favoritos import Favoritos
-from descargas import Descargas
 
 
 class VentanaIncognito(MiNavegador):
 
-    def __init__(self, gestor, prefs):
-        # Perfil aislado (todo vive en RAM).
+    def __init__(self, gestor, prefs, historial, favoritos, descargas):
+        # Perfil aislado.
         perfil_inc = QWebEngineProfile()
         perfil_inc.setHttpUserAgent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -27,31 +23,39 @@ class VentanaIncognito(MiNavegador):
         # Detector Vim para este perfil.
         perfil_inc.scripts().insert(crear_script_vim())
 
-        # Interceptor propio (su propio contador del escudo).
+        # Interceptor propio.
         interceptor_inc = Bloqueador(gestor)
         perfil_inc.setUrlRequestInterceptor(interceptor_inc)
 
-        # Modelos vacíos y sin ruta: nada de esto toca el disco, y esta
-        # ventana no puede ver ni borrar tus datos reales.
+        # Conectar descargas del perfil incógnito.
+        from navegador import _on_download_requested
+        perfil_inc.downloadRequested.connect(_on_download_requested)
+
+        # Llamar al padre con los modelos compartidos (aunque incógnito no
+        # los usa para guardar, los necesita para construir la UI).
         super().__init__(
-            gestor, prefs,
-            Historial(ruta=None), Favoritos(ruta=None), Descargas(ruta=None),
+            gestor, prefs, historial, favoritos, descargas,
             perfil_web=perfil_inc,
             interceptor_propio=interceptor_inc,
             es_incognito=True,
         )
 
-        # El perfil debe morir DESPUÉS de las páginas que lo usan: al ser
-        # hijo de la ventana, Qt lo destruye el último.
-        perfil_inc.setParent(self)
-
         self.setWindowTitle("🕵️  Mi Navegador — Modo Incógnito")
         self.resize(1200, 800)
 
+        # Avisar al interceptor de esta ventana (para el escudo por pestaña).
+        interceptor_inc.navegador = self
+
+        # Registrar en la lista global.
+        app = QApplication.instance()
+        if not hasattr(app, "_ventanas_navegador"):
+            app._ventanas_navegador = []
+        app._ventanas_navegador.append(self)
+
     def closeEvent(self, event):
-        # Soltamos el interceptor antes de que Python lo borre.
-        self.perfil_web.setUrlRequestInterceptor(None)
         app = QApplication.instance()
         if hasattr(app, "_ventanas_incognito") and self in app._ventanas_incognito:
             app._ventanas_incognito.remove(self)
+        if hasattr(app, "_ventanas_navegador") and self in app._ventanas_navegador:
+            app._ventanas_navegador.remove(self)
         super().closeEvent(event)

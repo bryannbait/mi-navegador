@@ -7,36 +7,34 @@ from urllib.parse import quote, urlparse
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QLineEdit, QToolBar, QPushButton,
-    QProgressBar, QWidget, QVBoxLayout, QTabWidget, QMenu,
-    QInputDialog, QCompleter, QFileDialog
+    QProgressBar, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
+    QMenu, QInputDialog, QCompleter, QFileDialog, QLabel
 )
-from PyQt6.QtCore import QUrl, Qt, QStringListModel, QTimer
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtCore import QUrl, Qt, QStringListModel, QSize
+from PyQt6.QtGui import QAction, QKeySequence, QIcon
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import (
-    QWebEngineProfile, QWebEngineSettings
-)
+from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
 
 from bloqueador import Bloqueador
+from historial import Historial
 from ventana_historial import VentanaHistorial
+from favoritos import Favoritos
 from ventana_favoritos import VentanaFavoritos
+from descargas import Descargas
 from ventana_descargas import VentanaDescargas
 from atajos_vim import VimKeys
 from puente_vim import PaginaVim, crear_script_vim
 import motores
 import config
+from assets.icons.helpers import icono
 
 
 # ---------- VARIABLES GLOBALES ----------
 
-interceptor = None   # interceptor del perfil normal (lo crea configurar_perfil)
-
-
-def url_a_texto(qurl):
-    """URL como texto para GUARDAR (historial, favoritos). Los espacios van
-    como %20 para que la URL siga siendo válida al volver a abrirla."""
-    return qurl.toString(QUrl.ComponentFormattingOption.EncodeSpaces)
+gestor_bloqueo = None
+interceptor = None
+ventana_descargas_global = None
 
 
 def configurar_perfil(gestor):
@@ -54,11 +52,48 @@ def configurar_perfil(gestor):
     # Detector Vim para inputs.
     perfil.scripts().insert(crear_script_vim())
 
+    # Descargas.
+    perfil.downloadRequested.connect(_on_download_requested)
+
     ajustes = perfil.settings()
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
     return perfil
+
+
+def _on_download_requested(download):
+    """Se llama cuando una web lanza una descarga."""
+    nombre_sugerido = download.downloadFileName()
+    ruta, _ = QFileDialog.getSaveFileName(
+        None, "Guardar archivo como", nombre_sugerido
+    )
+    if not ruta:
+        download.cancel()
+        return
+
+    download.setDownloadDirectory(os.path.dirname(ruta))
+    download.setDownloadFileName(os.path.basename(ruta))
+    download.accept()
+
+    # Registrar en el modelo compartido de descargas.
+    app = QApplication.instance()
+    gestor_desc = getattr(app, "_gestor_descargas_global", None)
+    if gestor_desc is not None:
+        entrada = gestor_desc.añadir(
+            nombre=os.path.basename(ruta),
+            ruta=ruta,
+            url=download.url().toString(),
+            tamano=download.totalBytes(),
+            estado="en curso",
+        )
+        # Avisar al panel si está abierto.
+        if ventana_descargas_global is not None:
+            ventana_descargas_global.añadir_descarga(download, entrada)
+
+    # Avisar a todas las ventanas.
+    for v in getattr(app, "_ventanas_navegador", []):
+        v._notificar_descarga(nombre_sugerido, ruta)
 
 
 def hoja_de_estilos():
@@ -88,8 +123,9 @@ def hoja_de_estilos():
         color: {config.COLOR_TEXTO};
         border: none;
         border-radius: 6px;
-        padding: 6px 10px;
-        font-size: 15px;
+        padding: 4px 6px;
+        font-size: 13px;
+        min-width: 28px;
     }}
     QPushButton:hover {{ background-color: {config.COLOR_BOTON_HOVER}; }}
     QPushButton:pressed {{
@@ -104,6 +140,7 @@ def hoja_de_estilos():
         font-size: 16px;
         padding: 4px 8px;
         border-radius: 8px;
+        min-width: 0px;
     }}
 
     QLineEdit {{
@@ -214,12 +251,12 @@ class MiNavegador(QMainWindow):
         self.gestor = gestor
         self.prefs = prefs
 
-        # Modelos compartidos (pasados por constructor).
+        # Modelos compartidos
         self.historial = historial
         self.favoritos = favoritos
         self.descargas = descargas
 
-        # Modo incógnito.
+        # Modo incógnito
         self.es_incognito = es_incognito
         self.perfil_web = perfil_web
         self.interceptor_actual = (
@@ -230,29 +267,24 @@ class MiNavegador(QMainWindow):
             "motor_busqueda", motores.motor_por_defecto()
         )
 
-        # Las descargas del perfil de ESTA ventana (normal o incógnito)
-        # las gestiona esta ventana, con SUS modelos.
-        self._panel_descargas = None
-        perfil = (perfil_web if perfil_web is not None
-                  else QWebEngineProfile.defaultProfile())
-        perfil.downloadRequested.connect(self._descarga_solicitada)
-
         self.setWindowTitle(f"{config.NOMBRE} {config.VERSION}")
         self.resize(1200, 800)
 
-        # --- Red para sugerencias ---
+        # Red para sugerencias
         self.net = QNetworkAccessManager(self)
         self.reply_sugerencias = None
 
-        # --- Barra de direcciones ---
+        # --- Barra de direcciones y candado ---
         self.barra = QLineEdit()
-        self.barra.setPlaceholderText(
-            "Busca o escribe una dirección... (!g, !w para atajos)"
-        )
+        self.barra.setPlaceholderText("Busca o escribe una dirección... (!g, !w para atajos)")
         self.barra.returnPressed.connect(self.navegar)
         self.barra.textEdited.connect(self._pedir_sugerencias)
 
-        # --- Autocompletado ---
+        self.lbl_candado = QLabel("🔒")
+        self.lbl_candado.setToolTip("Conexión segura")
+        self.lbl_candado.setStyleSheet("QLabel { color: #a6e3a1; padding: 0 4px 0 8px; font-size: 14px; }")
+
+        # Autocompletado
         self.modelo_sugerencias = QStringListModel([], self)
         self.completer = QCompleter(self.modelo_sugerencias, self)
         self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -265,26 +297,39 @@ class MiNavegador(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        self.btn_atras = QPushButton("←")
+        # Atrás
+        self.btn_atras = QPushButton()
+        self.btn_atras.setIcon(icono("arrow-left"))
+        self.btn_atras.setIconSize(QSize(18, 18))
         self.btn_atras.setToolTip("Atrás (Alt+←)")
         self.btn_atras.clicked.connect(self.atras_actual)
         toolbar.addWidget(self.btn_atras)
 
-        self.btn_adelante = QPushButton("→")
+        # Adelante
+        self.btn_adelante = QPushButton()
+        self.btn_adelante.setIcon(icono("arrow-right"))
+        self.btn_adelante.setIconSize(QSize(18, 18))
         self.btn_adelante.setToolTip("Adelante (Alt+→)")
         self.btn_adelante.clicked.connect(self.adelante_actual)
         toolbar.addWidget(self.btn_adelante)
 
-        self.btn_recargar = QPushButton("⟳")
+        # Recargar
+        self.btn_recargar = QPushButton()
+        self.btn_recargar.setIcon(icono("rotate-cw"))
+        self.btn_recargar.setIconSize(QSize(18, 18))
         self.btn_recargar.setToolTip("Recargar (F5)")
         self.btn_recargar.clicked.connect(self.recargar_o_detener)
         toolbar.addWidget(self.btn_recargar)
 
-        btn_inicio = QPushButton("⌂")
+        # Inicio
+        btn_inicio = QPushButton()
+        btn_inicio.setIcon(icono("home"))
+        btn_inicio.setIconSize(QSize(18, 18))
         btn_inicio.setToolTip("Inicio (Alt+Inicio)")
         btn_inicio.clicked.connect(self.inicio_actual)
         toolbar.addWidget(btn_inicio)
 
+        # Motor (con emoji)
         self.btn_motor = QPushButton()
         self.btn_motor.setObjectName("btn_motor")
         self.btn_motor.setToolTip("Elegir motor de búsqueda")
@@ -292,35 +337,61 @@ class MiNavegador(QMainWindow):
         toolbar.addWidget(self.btn_motor)
         self._actualizar_icono_motor()
 
-        toolbar.addWidget(self.barra)
+        # Contenedor candado + barra
+        contenedor_barra = QWidget()
+        layout_barra = QHBoxLayout(contenedor_barra)
+        layout_barra.setContentsMargins(0, 0, 0, 0)
+        layout_barra.setSpacing(0)
+        layout_barra.addWidget(self.lbl_candado)
+        layout_barra.addWidget(self.barra)
+        toolbar.addWidget(contenedor_barra)
 
-        self.btn_escudo = QPushButton("🛡️ 0")
+        # Escudo
+        self.btn_escudo = QPushButton()
+        self.btn_escudo.setIcon(icono("shield", color="#a6e3a1"))
+        self.btn_escudo.setIconSize(QSize(18, 18))
+        self.btn_escudo.setText(" 0")
         self.btn_escudo.setToolTip("Bloqueador de anuncios")
         self.btn_escudo.clicked.connect(self._mostrar_menu_escudo)
         self.btn_escudo.setObjectName("escudo_activo")
         toolbar.addWidget(self.btn_escudo)
 
-        self.btn_estrella = QPushButton("☆")
+        # Estrella
+        self.btn_estrella = QPushButton()
+        self.btn_estrella.setIcon(icono("star"))
+        self.btn_estrella.setIconSize(QSize(18, 18))
         self.btn_estrella.setToolTip("Añadir a favoritos (Ctrl+D)")
         self.btn_estrella.clicked.connect(self._toggle_favorito)
         toolbar.addWidget(self.btn_estrella)
 
-        btn_fav = QPushButton("🔖")
+        # Marcadores
+        btn_fav = QPushButton()
+        btn_fav.setIcon(icono("bookmark"))
+        btn_fav.setIconSize(QSize(18, 18))
         btn_fav.setToolTip("Gestionar favoritos (Ctrl+Shift+O)")
         btn_fav.clicked.connect(self._abrir_ventana_favoritos)
         toolbar.addWidget(btn_fav)
 
-        self.btn_historial = QPushButton("🕘")
+        # Historial
+        self.btn_historial = QPushButton()
+        self.btn_historial.setIcon(icono("clock"))
+        self.btn_historial.setIconSize(QSize(18, 18))
         self.btn_historial.setToolTip("Historial")
         self.btn_historial.clicked.connect(self._mostrar_menu_historial)
         toolbar.addWidget(self.btn_historial)
 
-        btn_inc = QPushButton("🕵️")
+        # Incógnito
+        btn_inc = QPushButton()
+        btn_inc.setIcon(icono("eye-off"))
+        btn_inc.setIconSize(QSize(18, 18))
         btn_inc.setToolTip("Nueva ventana de incógnito (Ctrl+Shift+N)")
         btn_inc.clicked.connect(self.abrir_incognito)
         toolbar.addWidget(btn_inc)
 
-        btn_desc = QPushButton("📥")
+        # Descargas
+        btn_desc = QPushButton()
+        btn_desc.setIcon(icono("download"))
+        btn_desc.setIconSize(QSize(18, 18))
         btn_desc.setToolTip("Descargas (Ctrl+J)")
         btn_desc.clicked.connect(self.abrir_panel_descargas)
         toolbar.addWidget(btn_desc)
@@ -361,17 +432,10 @@ class MiNavegador(QMainWindow):
         layout.addWidget(self.tabs)
         self.setCentralWidget(contenedor)
 
-        # El interceptor necesita saber a qué ventana avisar (escudo).
-        if self.interceptor_actual is not None:
+        if self.interceptor_actual is not None and not self.es_incognito:
             self.interceptor_actual.navegador = self
 
-        # Refresca el escudo como mucho cada 150 ms, no en cada petición.
-        self._timer_escudo = QTimer(self)
-        self._timer_escudo.setSingleShot(True)
-        self._timer_escudo.setInterval(150)
-        self._timer_escudo.timeout.connect(self.actualizar_escudo)
-
-        # Vim.
+        self._ctrl_pulsado = False
         self.vim = VimKeys(self)
 
         self._crear_atajos()
@@ -381,61 +445,29 @@ class MiNavegador(QMainWindow):
     # ---------- ABRIR INCÓGNITO ----------
 
     def abrir_incognito(self):
-        """Abre una nueva ventana en modo incógnito."""
         from ventana_incognito import VentanaIncognito
-
         app = QApplication.instance()
         if not hasattr(app, "_ventanas_incognito"):
             app._ventanas_incognito = []
-
-        v = VentanaIncognito(self.gestor, self.prefs)
+        v = VentanaIncognito(self.gestor, self.prefs, self.historial, self.favoritos, self.descargas)
         app._ventanas_incognito.append(v)
         v.show()
 
-    # ---------- DESCARGAS ----------
-
-    def _descarga_solicitada(self, download):
-        """Una web lanzó una descarga en el perfil de esta ventana."""
-        nombre_sugerido = download.downloadFileName()
-        ruta, _ = QFileDialog.getSaveFileName(
-            self, "Guardar archivo como", nombre_sugerido
-        )
-        if not ruta:
-            download.cancel()
-            return
-
-        download.setDownloadDirectory(os.path.dirname(ruta))
-        download.setDownloadFileName(os.path.basename(ruta))
-        download.accept()
-
-        # self.descargas es el modelo real en la ventana normal y uno solo
-        # en memoria en incógnito, así que aquí no hace falta distinguir.
-        entrada = self.descargas.añadir(
-            nombre=os.path.basename(ruta),
-            ruta=ruta,
-            url=url_a_texto(download.url()),
-            tamano=download.totalBytes(),
-            estado="en curso",
-        )
-        self._obtener_panel_descargas().añadir_descarga(download, entrada)
-        self._notificar_descarga(nombre_sugerido, ruta)
-
-    def _obtener_panel_descargas(self):
-        # Sin ventana padre: así no se destruye si se cierra otra ventana.
-        if self._panel_descargas is None:
-            self._panel_descargas = VentanaDescargas(self.descargas)
-        return self._panel_descargas
-
-    def abrir_panel_descargas(self):
-        panel = self._obtener_panel_descargas()
-        panel.show()
-        panel.raise_()
-        panel.activateWindow()
+    # ---------- DESCARGA ----------
 
     def _notificar_descarga(self, nombre, ruta):
-        self.statusBar().showMessage(
-            f"📥 Descargando: {nombre}  →  {ruta}", 5000
-        )
+        try:
+            self.statusBar().showMessage(f"📥 Descargando: {nombre}  →  {ruta}", 5000)
+        except Exception:
+            pass
+
+    def abrir_panel_descargas(self):
+        global ventana_descargas_global
+        if ventana_descargas_global is None:
+            ventana_descargas_global = VentanaDescargas(self.descargas, self)
+        ventana_descargas_global.show()
+        ventana_descargas_global.raise_()
+        ventana_descargas_global.activateWindow()
 
     # ---------- MOTOR DE BÚSQUEDA ----------
 
@@ -451,9 +483,7 @@ class MiNavegador(QMainWindow):
             if clave == self.motor_actual:
                 texto = "● " + texto
             accion = menu.addAction(texto)
-            accion.triggered.connect(
-                lambda _=False, c=clave: self._cambiar_motor(c, self._ctrl_pulsado())
-            )
+            accion.triggered.connect(lambda _=False, c=clave: self._cambiar_motor(c, self._ctrl_pulsado))
 
         menu.addSeparator()
         ayuda = menu.addAction("Clic: cambiar motor  ·  Ctrl+Clic: ir a la home")
@@ -466,7 +496,6 @@ class MiNavegador(QMainWindow):
         self.motor_actual = clave
         self.prefs.set("motor_busqueda", clave)
         self._actualizar_icono_motor()
-
         if ir_a_home:
             motor = motores.obtener(clave)
             url_home = motor.get("url_home")
@@ -482,29 +511,22 @@ class MiNavegador(QMainWindow):
         if not texto or texto.startswith("!"):
             self.modelo_sugerencias.setStringList([])
             return
-
         motor = motores.obtener(self.motor_actual)
         plantilla = motor.get("url_sugerencias")
         if not plantilla:
             self.modelo_sugerencias.setStringList([])
             return
-
         url = plantilla.format(q=quote(texto))
-
         if self.reply_sugerencias is not None:
-            try:
-                self.reply_sugerencias.abort()
-            except Exception:
-                pass
-
+            try: self.reply_sugerencias.abort()
+            except Exception: pass
         peticion = QNetworkRequest(QUrl(url))
         self.reply_sugerencias = self.net.get(peticion)
         self.reply_sugerencias.finished.connect(self._on_sugerencias)
 
     def _on_sugerencias(self):
         reply = self.sender()
-        if reply is None:
-            return
+        if reply is None: return
         try:
             if reply.error() != QNetworkReply.NetworkError.NoError:
                 self.modelo_sugerencias.setStringList([])
@@ -516,7 +538,6 @@ class MiNavegador(QMainWindow):
             reply.deleteLater()
             if self.reply_sugerencias is reply:
                 self.reply_sugerencias = None
-
         sugerencias = self._parsear_sugerencias(datos)
         self.modelo_sugerencias.setStringList(sugerencias[:8])
 
@@ -525,48 +546,38 @@ class MiNavegador(QMainWindow):
             data = json.loads(datos)
         except json.JSONDecodeError:
             return []
-
         if isinstance(data, list) and data and isinstance(data[0], dict):
             return [d.get("phrase", "") for d in data if d.get("phrase")]
-
         if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
             return [s for s in data[1] if isinstance(s, str)]
-
         return []
 
     # ---------- NAVEGACIÓN ----------
 
     def navegar(self):
         view = self.pestana_actual()
-        if view is None:
-            return
-
+        if view is None: return
         texto = self.barra.text().strip()
-        if not texto:
-            return
+        if not texto: return
 
         plantilla, consulta = motores.buscar_bang(texto)
         if plantilla:
             url = plantilla.format(q=quote(consulta))
             view.setUrl(QUrl(url))
             return
-
         if texto.startswith(("http://", "https://")):
             view.setUrl(QUrl(texto))
             return
-
         if "." in texto and " " not in texto:
             view.setUrl(QUrl("https://" + texto))
             return
-
         motor = motores.obtener(self.motor_actual)
         url = motor["url_busqueda"].format(q=quote(texto))
         view.setUrl(QUrl(url))
 
     def recargar_o_detener(self):
         view = self.pestana_actual()
-        if view is None:
-            return
+        if view is None: return
         if self.progreso.isVisible() and self.progreso.value() < 100:
             view.stop()
         else:
@@ -574,22 +585,35 @@ class MiNavegador(QMainWindow):
 
     def atras_actual(self):
         v = self.pestana_actual()
-        if v:
-            v.back()
+        if v: v.back()
 
     def adelante_actual(self):
         v = self.pestana_actual()
-        if v:
-            v.forward()
+        if v: v.forward()
 
     def inicio_actual(self):
         v = self.pestana_actual()
-        if v:
-            v.setUrl(QUrl(config.HOME))
+        if v: v.setUrl(QUrl(config.HOME))
 
     def enfocar_barra(self):
         self.barra.setFocus()
         self.barra.selectAll()
+
+    # ---------- CANDADO HTTPS ----------
+
+    def _actualizar_candado(self, qurl):
+        esquema = qurl.scheme().lower()
+        if esquema == "https":
+            self.lbl_candado.setText("🔒")
+            self.lbl_candado.setToolTip("Conexión segura (HTTPS)")
+            self.lbl_candado.setStyleSheet("QLabel { color: #a6e3a1; padding: 0 4px 0 8px; font-size: 14px; }")
+        elif esquema == "http":
+            self.lbl_candado.setText("⚠️")
+            self.lbl_candado.setToolTip("Conexión NO segura (HTTP)")
+            self.lbl_candado.setStyleSheet("QLabel { color: #f9e2af; padding: 0 4px 0 8px; font-size: 14px; }")
+        else:
+            self.lbl_candado.setText("")
+            self.lbl_candado.setToolTip("")
 
     # ---------- ESCUDO ----------
 
@@ -597,51 +621,29 @@ class MiNavegador(QMainWindow):
         v = self.pestana_actual()
         return id(v) if v else None
 
-    def id_pestana_de(self, qurl):
-        """Id de la pestaña que está mostrando esa URL (la 'first party' de
-        una petición). Si ninguna coincide, devolvemos la activa."""
-        def sin_fragmento(u):
-            return u.adjusted(QUrl.UrlFormattingOption.RemoveFragment).toString()
-
-        objetivo = sin_fragmento(qurl)
-        activa = self.pestana_actual()
-        # Primero la activa, luego las demás.
-        orden = [activa] if activa is not None else []
-        for i in range(self.tabs.count()):
-            w = self.tabs.widget(i)
-            if w is not activa:
-                orden.append(w)
-        for v in orden:
-            if sin_fragmento(v.url()) == objetivo:
-                return id(v)
-        return id(activa) if activa is not None else None
-
-    def actualizar_escudo_pronto(self):
-        """Pide refrescar el escudo; si ya hay uno pendiente, no hace nada."""
-        if not self._timer_escudo.isActive():
-            self._timer_escudo.start()
-
     def actualizar_escudo(self):
-        if self.interceptor_actual is None:
-            return
+        if self.interceptor_actual is None: return
         pid = self.id_pestana_activa()
-        if pid is None:
-            return
+        if pid is None: return
         c = self.interceptor_actual.contador_actual(pid)
-        self.btn_escudo.setText(f"🛡️ {c['total']}")
-        self.btn_escudo.setObjectName(
-            "escudo_activo" if c["total"] > 0 else "escudo_inactivo"
-        )
+        total = c["total"]
+        self.btn_escudo.setText(f" {total}")
+
+        if total > 0:
+            self.btn_escudo.setIcon(icono("shield", color="#a6e3a1"))
+            self.btn_escudo.setObjectName("escudo_activo")
+        else:
+            self.btn_escudo.setIcon(icono("shield", color="#6c7086"))
+            self.btn_escudo.setObjectName("escudo_inactivo")
+
         self.btn_escudo.style().unpolish(self.btn_escudo)
         self.btn_escudo.style().polish(self.btn_escudo)
 
     def _mostrar_menu_escudo(self):
         view = self.pestana_actual()
-        if view is None:
-            return
+        if view is None: return
         pid = self.id_pestana_activa()
-        c = (self.interceptor_actual.contador_actual(pid)
-             if self.interceptor_actual else {"total": 0, "por_tipo": {}})
+        c = (self.interceptor_actual.contador_actual(pid) if self.interceptor_actual else {"total": 0, "por_tipo": {}})
 
         menu = QMenu(self)
         a = menu.addAction(f"Bloqueados: {c['total']}")
@@ -650,13 +652,7 @@ class MiNavegador(QMainWindow):
 
         tipos = c.get("por_tipo", {})
         if tipos:
-            nombres = {
-                "script": "Scripts", "image": "Imágenes",
-                "stylesheet": "Estilos", "subdocument": "Iframes",
-                "document": "Páginas", "xhr": "XHR", "media": "Medios",
-                "font": "Fuentes", "ping": "Pings", "object": "Objetos",
-                "other": "Otros",
-            }
+            nombres = {"script": "Scripts", "image": "Imágenes", "stylesheet": "Estilos", "subframe": "Iframes", "xhr": "XHR", "media": "Medios", "font": "Fuentes", "other": "Otros"}
             for tipo, cantidad in sorted(tipos.items(), key=lambda x: -x[1]):
                 acc = menu.addAction(f"{nombres.get(tipo, tipo.capitalize())}: {cantidad}")
                 acc.setEnabled(False)
@@ -699,18 +695,14 @@ class MiNavegador(QMainWindow):
 
     def _toggle_favorito(self):
         view = self.pestana_actual()
-        if view is None:
-            return
-        url = url_a_texto(view.url())
-        if not url or url.startswith(("about:", "data:", "file:")):
-            return
+        if view is None: return
+        url = view.url().toString()
+        if not url or url.startswith(("about:", "data:", "file:")): return
         if self.favoritos.existe(url):
             self.favoritos.eliminar(url)
         else:
             titulo = view.title() or url
-            nuevo, ok = QInputDialog.getText(
-                self, "Añadir a favoritos", "Nombre:", text=titulo
-            )
+            nuevo, ok = QInputDialog.getText(self, "Añadir a favoritos", "Nombre:", text=titulo)
             if ok and nuevo.strip():
                 self.favoritos.añadir(nuevo.strip(), url)
         self._refrescar_favoritos()
@@ -721,18 +713,17 @@ class MiNavegador(QMainWindow):
 
     def _actualizar_estrella(self):
         view = self.pestana_actual()
-        if view is None:
-            return
+        if view is None: return
         if self.es_incognito:
-            self.btn_estrella.setText("☆")
+            self.btn_estrella.setIcon(icono("star"))
             self.btn_estrella.setToolTip("Favoritos no disponibles en incógnito")
             return
-        url = url_a_texto(view.url())
+        url = view.url().toString()
         if self.favoritos.existe(url):
-            self.btn_estrella.setText("★")
+            self.btn_estrella.setIcon(icono("star", color="#f9e2af"))
             self.btn_estrella.setToolTip("Quitar de favoritos (Ctrl+D)")
         else:
-            self.btn_estrella.setText("☆")
+            self.btn_estrella.setIcon(icono("star"))
             self.btn_estrella.setToolTip("Añadir a favoritos (Ctrl+D)")
 
     def _refrescar_barra_favoritos(self):
@@ -756,9 +747,7 @@ class MiNavegador(QMainWindow):
             btn.setToolTip(url)
             btn.clicked.connect(lambda _=False, u=url: self._abrir_en_actual(u))
             btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            btn.customContextMenuRequested.connect(
-                lambda pos, u=url, b=btn: self._menu_contextual_favorito(u, b, pos)
-            )
+            btn.customContextMenuRequested.connect(lambda pos, u=url, b=btn: self._menu_contextual_favorito(u, b, pos))
             self.barra_fav.addWidget(btn)
 
     def _menu_contextual_favorito(self, url, boton, pos):
@@ -780,9 +769,7 @@ class MiNavegador(QMainWindow):
             if e.get("url") == url:
                 actual = e.get("titulo", "")
                 break
-        nuevo, ok = QInputDialog.getText(
-            self, "Renombrar favorito", "Nuevo nombre:", text=actual
-        )
+        nuevo, ok = QInputDialog.getText(self, "Renombrar favorito", "Nuevo nombre:", text=actual)
         if ok and nuevo.strip():
             self.favoritos.renombrar(url, nuevo.strip())
             self._refrescar_favoritos()
@@ -811,9 +798,7 @@ class MiNavegador(QMainWindow):
                 corto = titulo if len(titulo) <= 60 else titulo[:57] + "…"
                 a = menu.addAction(corto)
                 a.setToolTip(e.get("url", ""))
-                a.triggered.connect(
-                    lambda _=False, url=e.get("url", ""): self._abrir_en_actual(url)
-                )
+                a.triggered.connect(lambda _=False, url=e.get("url", ""): self._abrir_en_actual(url))
         menu.addSeparator()
         a = menu.addAction("Ver todo el historial…")
         a.triggered.connect(self._abrir_ventana_historial)
@@ -825,8 +810,7 @@ class MiNavegador(QMainWindow):
 
     def _abrir_en_actual(self, url):
         v = self.pestana_actual()
-        if v and url:
-            v.setUrl(QUrl(url))
+        if v and url: v.setUrl(QUrl(url))
 
     def _abrir_ventana_historial(self):
         dlg = VentanaHistorial(self.historial, self)
@@ -834,11 +818,6 @@ class MiNavegador(QMainWindow):
             self._abrir_en_actual(dlg.url_seleccionada)
 
     def closeEvent(self, event):
-        # Quitar el filtro de teclas de esta ventana y cerrar su panel
-        # (si se quedara abierto, la aplicación no terminaría).
-        self.vim.desinstalar()
-        if self._panel_descargas is not None:
-            self._panel_descargas.close()
         if not self.es_incognito:
             self.historial.guardar()
             self.favoritos.guardar()
@@ -853,25 +832,23 @@ class MiNavegador(QMainWindow):
 
     def nueva_pestana(self, url=None):
         view = QWebEngineView()
-
-        perfil = (self.perfil_web if self.perfil_web is not None
-                  else QWebEngineProfile.defaultProfile())
-
+        perfil = (self.perfil_web if self.perfil_web is not None else QWebEngineProfile.defaultProfile())
         page = PaginaVim(perfil, view)
         view.setPage(page)
 
         view.urlChanged.connect(self._on_url_changed)
         view.titleChanged.connect(self._on_title_changed)
+        view.iconUrlChanged.connect(self._on_icon_changed)
         view.loadStarted.connect(self._on_load_started)
         view.loadProgress.connect(self._on_load_progress)
         view.loadFinished.connect(self._on_load_finished)
 
-        if self.interceptor_actual is not None:
-            self.interceptor_actual.registrar_pestana(id(view))
-
         idx = self.tabs.addTab(view, "Nueva pestaña")
         self.tabs.setCurrentIndex(idx)
         view.setUrl(QUrl(url or config.HOME))
+
+        if self.interceptor_actual is not None:
+            self.interceptor_actual.registrar_pestana(id(view))
         return view
 
     def cerrar_pestana(self, idx):
@@ -891,13 +868,13 @@ class MiNavegador(QMainWindow):
 
     def cambio_de_pestana(self, idx):
         view = self.tabs.widget(idx)
-        if view is None:
-            return
+        if view is None: return
         self.barra.setText(view.url().toString())
+        self._actualizar_candado(view.url())
         titulo = view.title() or "Nueva pestaña"
         self.setWindowTitle(f"{titulo} — {config.NOMBRE}")
         self.progreso.hide()
-        self.btn_recargar.setText("⟳")
+        self.btn_recargar.setIcon(icono("rotate-cw"))
         self.btn_recargar.setToolTip("Recargar (F5)")
         self._actualizar_estrella()
         self.actualizar_escudo()
@@ -911,6 +888,7 @@ class MiNavegador(QMainWindow):
         if self._es_actual():
             self.barra.setText(qurl.toString())
             self._actualizar_estrella()
+            self._actualizar_candado(qurl)
 
     def _on_title_changed(self, titulo):
         view = self.sender()
@@ -922,11 +900,21 @@ class MiNavegador(QMainWindow):
         if self._es_actual():
             self.setWindowTitle(f"{titulo} — {config.NOMBRE}")
 
+    def _on_icon_changed(self, icon_url):
+        view = self.sender()
+        if not isinstance(view, QWebEngineView): return
+        idx = self.tabs.indexOf(view)
+        if idx == -1: return
+
+        if icon_url.isValid() and not icon_url.isEmpty():
+            icono_pestana = QIcon(icon_url.toString())
+            self.tabs.setTabIcon(idx, icono_pestana)
+
     def _on_load_started(self):
         if self._es_actual():
             self.progreso.setValue(0)
             self.progreso.show()
-            self.btn_recargar.setText("✕")
+            self.btn_recargar.setIcon(icono("x"))
             self.btn_recargar.setToolTip("Detener (Esc)")
 
     def _on_load_progress(self, valor):
@@ -936,7 +924,7 @@ class MiNavegador(QMainWindow):
     def _on_load_finished(self, ok):
         if self._es_actual():
             self.progreso.hide()
-            self.btn_recargar.setText("⟳")
+            self.btn_recargar.setIcon(icono("rotate-cw"))
             self.btn_recargar.setToolTip("Recargar (F5)")
             self._actualizar_estrella()
             self.actualizar_escudo()
@@ -944,14 +932,19 @@ class MiNavegador(QMainWindow):
         if ok and not self.es_incognito:
             view = self.sender()
             if isinstance(view, QWebEngineView):
-                self.historial.añadir(view.title(), url_a_texto(view.url()))
+                self.historial.añadir(view.title(), view.url().toString())
 
     # ---------- TECLADO ----------
 
-    def _ctrl_pulsado(self):
-        """True si Ctrl está pulsado ahora mismo (aunque el foco esté en la web)."""
-        mods = QApplication.keyboardModifiers()
-        return bool(mods & Qt.KeyboardModifier.ControlModifier)
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Control:
+            self._ctrl_pulsado = True
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        if event.key() == Qt.Key.Key_Control:
+            self._ctrl_pulsado = False
+        super().keyReleaseEvent(event)
 
     # ---------- ATAJOS ----------
 
@@ -983,9 +976,7 @@ class MiNavegador(QMainWindow):
 
         self.accion_ver_fav = QAction(self)
         self.accion_ver_fav.setCheckable(True)
-        self.accion_ver_fav.setChecked(
-            self.prefs.get("mostrar_barra_favoritos", True)
-        )
+        self.accion_ver_fav.setChecked(self.prefs.get("mostrar_barra_favoritos", True))
         self.accion_ver_fav.setShortcut(QKeySequence("Ctrl+Shift+B"))
         self.accion_ver_fav.toggled.connect(self._toggle_barra_favoritos)
         self.addAction(self.accion_ver_fav)
@@ -1007,5 +998,4 @@ class MiNavegador(QMainWindow):
 
     def detener_actual(self):
         v = self.pestana_actual()
-        if v:
-            v.stop()
+        if v: v.stop()
