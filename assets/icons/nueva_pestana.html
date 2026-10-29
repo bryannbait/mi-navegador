@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Nueva Pestaña</title>
+    <style>
+        :root {
+            --fondo: #1e1e2e;
+            --texto: #cdd6f4;
+            --barra-fondo: #313244;
+            --acento: #89b4fa;
+            --hover: #45475a;
+        }
+        body {
+            background-color: var(--fondo);
+            color: var(--texto);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+        #saludo {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            letter-spacing: -0.5px;
+        }
+        #logo {
+            font-size: 42px;
+            margin-bottom: 10px;
+        }
+        .buscador-contenedor {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 50px;
+        }
+        .buscador-contenedor::before {
+            content: "🔍";
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            opacity: 0.5;
+        }
+        #q {
+            width: 100%;
+            padding: 18px 20px 18px 55px;
+            font-size: 16px;
+            color: var(--texto);
+            background-color: var(--barra-fondo);
+            border: 1px solid transparent;
+            border-radius: 30px;
+            outline: none;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        #q:focus {
+            border-color: var(--acento);
+            box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2);
+        }
+        #accesos {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            max-width: 600px;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+        .acceso {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: transparent;
+            border-radius: 12px;
+            padding: 15px;
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--texto);
+            transition: background-color 0.2s ease;
+        }
+        .acceso:hover {
+            background-color: var(--hover);
+        }
+        .acceso img {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+        }
+        .acceso span {
+            font-size: 12px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            opacity: 0.8;
+        }
+        form { margin: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="logo">🌐</div>
+    <div id="saludo">Hola</div>
+
+    <form class="buscador-contenedor" onsubmit="buscar(event)">
+        <input type="text" id="q" placeholder="Busca en la web..." autocomplete="off" autofocus>
+    </form>
+
+    <div id="accesos">
+        <!-- Aquí se inyectan los favoritos con JS -->
+    </div>
+
+    <script>
+        // Motor de búsqueda por defecto (se actualiza desde Python)
+        let motorUrl = "https://duckduckgo.com/?q=";
+
+        // Actualizar el saludo según la hora
+        function actualizarSaludo() {
+            const hora = new Date().getHours();
+            let saludo = "Buenas noches";
+            if (hora >= 5 && hora < 12) saludo = "Buenos días";
+            else if (hora >= 12 && hora < 20) saludo = "Buenas tardes";
+            document.getElementById("saludo").innerText = saludo + ", Balmore";
+        }
+
+        // Llamada desde Python para cambiar el motor
+        function actualizarMotor(nuevaUrl) {
+            motorUrl = nuevaUrl;
+        }
+
+        // Ejecutar búsqueda
+        function buscar(event) {
+            event.preventDefault();
+            const q = document.getElementById("q").value.trim();
+            if (q) {
+                // Si es un dominio, ir directo. Si no, buscar.
+                if (q.includes(".") && !q.includes(" ")) {
+                    window.location.href = "https://" + q;
+                } else {
+                    window.location.href = motorUrl + encodeURIComponent(q);
+                }
+            }
+        }
+
+        // Llamada desde Python para cargar los favoritos
+        function cargarFavoritos(favs) {
+            const contenedor = document.getElementById("accesos");
+            contenedor.innerHTML = "";
+            favs.slice(0, 8).forEach(f => {
+                const a = document.createElement("a");
+                a.className = "acceso";
+                a.href = f.url;
+                
+                const img = document.createElement("img");
+                // Usar favicon de Google como fallback rápido
+                img.src = `https://www.google.com/s2/favicons?domain=${f.url}&sz=64`;
+                img.onerror = () => { img.src = ""; img.style.display = "none"; };
+                
+                const span = document.createElement("span");
+                span.innerText = f.titulo;
+
+                a.appendChild(img);
+                a.appendChild(span);
+                contenedor.appendChild(a);
+            });
+        }
+
+        // Iniciar
+        actualizarSaludo();
+    </script>
+</body>
+</html>

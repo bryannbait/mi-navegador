@@ -845,7 +845,13 @@ class MiNavegador(QMainWindow):
 
         idx = self.tabs.addTab(view, "Nueva pestaña")
         self.tabs.setCurrentIndex(idx)
-        view.setUrl(QUrl(url or config.HOME))
+
+        # Si no hay URL, cargamos nuestra nueva pestaña personalizada
+        if url is None:
+            ruta_html = os.path.join(os.path.dirname(__file__), "assets", "nueva_pestana.html")
+            view.setUrl(QUrl.fromLocalFile(ruta_html))
+        else:
+            view.setUrl(QUrl(url))
 
         if self.interceptor_actual is not None:
             self.interceptor_actual.registrar_pestana(id(view))
@@ -929,10 +935,26 @@ class MiNavegador(QMainWindow):
             self._actualizar_estrella()
             self.actualizar_escudo()
 
-        if ok and not self.es_incognito:
-            view = self.sender()
-            if isinstance(view, QWebEngineView):
-                self.historial.añadir(view.title(), view.url().toString())
+        view = self.sender()
+        if not isinstance(view, QWebEngineView):
+            return
+
+        # Si es nuestra nueva pestaña, inyectamos datos
+        url_actual = view.url().toString()
+        if url_actual.endswith("nueva_pestana.html"):
+            motor = motores.obtener(self.motor_actual)
+            url_motor = motor["url_busqueda"].split("{q}")[0] # Tomamos solo la base
+            
+            # Enviamos el motor
+            view.page().runJavaScript(f"actualizarMotor('{url_motor}');")
+            
+            # Enviamos los favoritos
+            favs = self.favoritos.todos()
+            view.page().runJavaScript(f"cargarFavoritos({json.dumps(favs)});")
+
+        # Guardar historial (excepto si es incógnito o es la nueva pestaña)
+        if ok and not self.es_incognito and not url_actual.endswith("nueva_pestana.html"):
+            self.historial.añadir(view.title(), url_actual)
 
     # ---------- TECLADO ----------
 
