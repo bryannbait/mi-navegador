@@ -10,14 +10,14 @@ from historial import Historial
 from favoritos import Favoritos
 from descargas import Descargas
 from preferencias import Preferencias
-from navegador import MiNavegador, configurar_perfil, hoja_de_estilos
+from navegador import MiNavegador, configurar_perfil, aplicar_tema
 import config
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(config.NOMBRE)
-    app.setStyleSheet(hoja_de_estilos())
+    aplicar_tema(app)
 
     # Modelos reales: solo los usa la ventana normal.
     prefs = Preferencias()

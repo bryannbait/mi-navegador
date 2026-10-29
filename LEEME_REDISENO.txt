@@ -1,0 +1,22 @@
+REDISEÑO MiNavegador 1.2  (tema oscuro + violeta)
+==================================================
+Cómo instalarlo: copia el CONTENIDO de esta carpeta encima de tu proyecto
+(acepta reemplazar). Haz antes una copia de seguridad o un commit.
+No toca tus datos (historial, favoritos, descargas, preferencias, whitelist).
+
+ARCHIVOS NUEVOS
+  pestanas.py            barra de pestañas tipo píldora (misma interfaz que QTabWidget)
+  pagina_inicio.py       página de inicio propia: reloj, buscador, accesos a favoritos
+  assets/icons/*.svg     lock, triangle-alert, plus, search, globe, star-filled, tab-close(-hover)
+
+ARCHIVOS CAMBIADOS
+  config.py              paleta del tema (cambia COLOR_ACENTO* para otro color)
+  navegador.py           interfaz nueva, tema (aplicar_tema), página de inicio, favicons
+  main.py                llama a aplicar_tema(app)
+  puente_vim.py          captura la búsqueda de la página de inicio
+  atajos_vim.py          cartel Vim con colores del tema
+  ventana_incognito.py   título sin emoji + incógnito con cabecera tintada
+  ventana_descargas.py   color de texto desde config
+  assets/icons/helpers.py  iconos SVG nítidos (QSvgRenderer) con caché
+
+Para cambiar el acento: en config.py, COLOR_ACENTO, COLOR_ACENTO_SUAVE y COLOR_ACENTO_FUERTE.

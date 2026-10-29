@@ -2,6 +2,7 @@
 # Panel de descargas con progreso, pausa/reanudar, cancelar, abrir.
 
 import os
+import config
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -49,7 +50,7 @@ class FilaDescarga(QWidget):
 
         # Estado
         self.lbl_estado = QLabel("Iniciando…")
-        self.lbl_estado.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.lbl_estado.setStyleSheet("color: " + config.COLOR_TEXTO_SUAVE + "; font-size: 11px;")
         layout.addWidget(self.lbl_estado)
 
         # Botones

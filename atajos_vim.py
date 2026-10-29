@@ -4,6 +4,8 @@
 
 import json
 
+import config
+
 from PyQt6.QtCore import QObject, QEvent, Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QLabel
 
@@ -21,15 +23,15 @@ class IndicadorModo(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet("""
             QLabel {
-                background-color: #181825;
-                color: #89b4fa;
-                border: 1px solid #89b4fa;
+                background-color: @fondo@;
+                color: @acento@;
+                border: 1px solid @acento@;
                 border-radius: 6px;
                 padding: 6px 14px;
                 font-size: 13px;
                 font-weight: bold;
             }
-        """)
+        """.replace("@fondo@", config.COLOR_SUPERFICIE).replace("@acento@", config.COLOR_ACENTO_SUAVE))
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.hide)
@@ -306,4 +308,4 @@ class VimKeys(QObject):
             "t: nueva pestaña   |   x: cerrar   |   J / K: cambiar pestaña\n"
             "H: inicio   |   /: buscar   |   :t :w :q :help :inc :open URL"
         )
-        self.indicador.mostrar(ayuda, 6000)
+        self.indicador.mostrar(ayuda, 6000)
