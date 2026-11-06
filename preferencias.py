@@ -18,6 +18,7 @@ class Preferencias:
         por_defecto = {
             "motor_busqueda": "duckduckgo",
             "mostrar_barra_favoritos": True,
+            "anti_fingerprint": True,
         }
         if not os.path.exists(self.ruta):
             return por_defecto

@@ -6,6 +6,9 @@ from PyQt6.QtWebEngineCore import (
     QWebEngineUrlRequestInfo,
 )
 
+import config
+import anti_fingerprint
+
 
 # Mapeo de tipos de PyQt6 -> strings que espera adblock (estilo Brave/AdBlock).
 # Referencia: QWebEngineUrlRequestInfo.ResourceType
@@ -49,11 +52,18 @@ class Bloqueador(QWebEngineUrlRequestInterceptor):
     de bloqueos por pestaña.
     """
 
-    def __init__(self, gestor, parent=None):
+    def __init__(self, gestor, privacidad=True, ua=None, parent=None):
         super().__init__(parent)
         self.gestor = gestor
         self.contadores = {}
         self.navegador = None
+        self.privacidad = privacidad
+        # Sec-CH-UA coherente con el UA y con navigator.userAgentData.
+        self.sec_ch_ua = anti_fingerprint.cabecera_client_hints(ua) if ua else None
+
+    def set_privacidad(self, activo):
+        """El interruptor del escudo cambia también las cabeceras."""
+        self.privacidad = activo
 
     def registrar_pestana(self, pestana_id):
         self.contadores[pestana_id] = {"total": 0, "por_tipo": {}}
@@ -67,6 +77,18 @@ class Bloqueador(QWebEngineUrlRequestInterceptor):
     def interceptRequest(self, info):
         url = info.requestUrl().toString()
         tipo = _tipo_legible(info)
+
+        # Nivel 10: cabeceras de privacidad.
+        if self.privacidad:
+            try:
+                # Global Privacy Control: "no vendas ni compartas mis datos".
+                if config.FP_ENVIAR_GPC:
+                    info.setHttpHeader(b"Sec-GPC", b"1")
+                # Solo tiene sentido en HTTPS (los Client Hints son secure-only).
+                if self.sec_ch_ua and info.requestUrl().scheme() == "https":
+                    info.setHttpHeader(b"sec-ch-ua", self.sec_ch_ua)
+            except Exception:
+                pass
 
         source_url = ""
         try:

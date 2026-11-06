@@ -5,6 +5,7 @@
 from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtWidgets import QApplication
 
+import anti_fingerprint
 import config
 from bloqueador import Bloqueador
 from navegador import MiNavegador
@@ -19,17 +20,19 @@ class VentanaIncognito(MiNavegador):
     def __init__(self, gestor, prefs):
         # Perfil aislado (todo vive en RAM).
         perfil_inc = QWebEngineProfile()
-        perfil_inc.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
+        anti_fingerprint.preparar_perfil(
+            perfil_inc, prefs.get("anti_fingerprint", config.ANTI_FINGERPRINT)
         )
 
         # Detector Vim para este perfil.
         perfil_inc.scripts().insert(crear_script_vim())
 
         # Interceptor propio (su propio contador del escudo).
-        interceptor_inc = Bloqueador(gestor)
+        interceptor_inc = Bloqueador(
+            gestor,
+            privacidad=anti_fingerprint.esta_activo(perfil_inc),
+            ua=perfil_inc.httpUserAgent(),
+        )
         perfil_inc.setUrlRequestInterceptor(interceptor_inc)
 
         # Modelos vacíos y sin ruta: nada de esto toca el disco, y esta

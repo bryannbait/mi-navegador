@@ -22,6 +22,7 @@ from bloqueador import Bloqueador
 from ventana_historial import VentanaHistorial
 from ventana_favoritos import VentanaFavoritos
 from ventana_descargas import VentanaDescargas
+import anti_fingerprint
 from atajos_vim import VimKeys
 from puente_vim import PaginaVim, crear_script_vim
 from pestanas import Pestanas
@@ -42,16 +43,16 @@ def url_a_texto(qurl):
     return qurl.toString(QUrl.ComponentFormattingOption.EncodeSpaces)
 
 
-def configurar_perfil(gestor):
+def configurar_perfil(gestor, anti_fingerprint_activo=None):
     global interceptor
     perfil = QWebEngineProfile.defaultProfile()
-    perfil.setHttpUserAgent(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
+    anti_fingerprint.preparar_perfil(perfil, anti_fingerprint_activo)
     perfil.setHttpCacheMaximumSize(50 * 1024 * 1024)
-    interceptor = Bloqueador(gestor)
+    interceptor = Bloqueador(
+        gestor,
+        privacidad=anti_fingerprint.esta_activo(perfil),
+        ua=perfil.httpUserAgent(),
+    )
     perfil.setUrlRequestInterceptor(interceptor)
 
     # Detector Vim para inputs.
@@ -824,6 +825,20 @@ class MiNavegador(QMainWindow):
         acc = menu.addAction("Recargar reglas de bloqueo")
         acc.triggered.connect(self._recargar_reglas)
 
+        # --- Nivel 10: anti-fingerprinting ---
+        menu.addSeparator()
+        activo = anti_fingerprint.esta_activo(self._perfil_actual())
+        titulo = menu.addAction(
+            "Huella digital: " + ("protegida" if activo else "expuesta")
+        )
+        titulo.setEnabled(False)
+        acc = menu.addAction("Proteger contra fingerprinting")
+        acc.setCheckable(True)
+        acc.setChecked(activo)
+        acc.triggered.connect(
+            lambda _=False, a=acc: self._cambiar_anti_fingerprint(a.isChecked())
+        )
+
         pos = self.btn_escudo.mapToGlobal(self.btn_escudo.rect().bottomLeft())
         menu.exec(pos)
 
@@ -838,6 +853,28 @@ class MiNavegador(QMainWindow):
     def _recargar_reglas(self):
         self.gestor.cargar_listas()
         self.actualizar_escudo()
+
+    # ---------- PRIVACIDAD (Nivel 10) ----------
+
+    def _perfil_actual(self):
+        return (self.perfil_web if self.perfil_web is not None
+                else QWebEngineProfile.defaultProfile())
+
+    def _cambiar_anti_fingerprint(self, activo):
+        """Activa/desactiva la protección en el perfil de esta ventana.
+
+        Los scripts de un perfil se aplican al cargar cada página, así que
+        el cambio se nota al recargar (no hace falta reiniciar el navegador).
+        """
+        anti_fingerprint.aplicar(self._perfil_actual(), activo)
+        if self.interceptor_actual is not None:
+            self.interceptor_actual.set_privacidad(activo)
+        self.prefs.set("anti_fingerprint", activo)
+        aviso = ("Anti-fingerprinting activado" if activo
+                 else "Anti-fingerprinting desactivado")
+        self.statusBar().showMessage(
+            f"{aviso}: recarga la página para aplicarlo", 5000
+        )
 
     # ---------- FAVORITOS ----------
 

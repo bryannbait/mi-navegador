@@ -3,7 +3,7 @@
 
 # --- Identidad ---
 NOMBRE = "MiNavegador"
-VERSION = "1.2"
+VERSION = "1.3"
 
 # --- Página de inicio del motor (Ctrl+clic en el botón del motor) ---
 HOME = "https://duckduckgo.com"
@@ -29,3 +29,24 @@ COLOR_INCOGNITO     = "#1a1230"   # fondo de las barras en modo incógnito
 COLOR_BARRA_FONDO = COLOR_SUPERFICIE
 COLOR_BARRA_TEXTO = COLOR_TEXTO
 COLOR_BOTON_HOVER = COLOR_SUPERFICIE_2
+
+# --- Privacidad / anti-fingerprinting (Nivel 10) ---
+# Se puede activar o desactivar en caliente desde el menú del escudo.
+ANTI_FINGERPRINT = True
+
+# Idioma que ve la web y que mandamos en Accept-Language (deben coincidir).
+FP_IDIOMAS = ["es-MX", "es", "en-US", "en"]
+FP_ACCEPT_LANGUAGE = "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7"
+
+# Valores genéricos que sustituyen a los reales de tu equipo.
+FP_NUCLEOS = 8          # navigator.hardwareConcurrency
+FP_MEMORIA_GB = 8       # navigator.deviceMemory
+
+# Ruido determinista en canvas/WebGL: rompe la huella sin verse a simple vista.
+FP_RUIDO_CANVAS = True
+
+# Manda la cabecera Sec-GPC: 1 (Global Privacy Control, "no vendas mis datos").
+FP_ENVIAR_GPC = True
+
+# Si algún día quieres un User-Agent concreto, ponlo aquí (None = automático).
+UA_PERSONALIZADO = None
