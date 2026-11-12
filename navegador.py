@@ -227,6 +227,12 @@ class MiNavegador(QMainWindow):
         self.btn_lectura.setCheckable(True)
         self.btn_lectura.setChecked(False)
 
+        # --- Menú hamburguesa (Nivel 11 B5) ---
+        self.btn_menu = self._boton_icono("menu", "Menú (sesión, lectura, zoom, privacidad)",
+                                          self._abrir_menu_hamburguesa)
+        self.menu_hamburguesa = QMenu(self)
+        self._construir_menu_hamburguesa()
+
         fila_nav = QHBoxLayout()
         fila_nav.setContentsMargins(8, 4, 8, 6)
         fila_nav.setSpacing(4)
@@ -235,7 +241,7 @@ class MiNavegador(QMainWindow):
             fila_nav.addWidget(w)
         fila_nav.addWidget(self.barra, 1)
         for w in (self.btn_escudo, btn_fav, self.btn_historial, btn_inc, btn_desc,
-                  self.btn_lectura):
+                  self.btn_lectura, self.btn_menu):
             fila_nav.addWidget(w)
 
         # --- Fila 3: marcadores ---
@@ -1348,6 +1354,40 @@ class MiNavegador(QMainWindow):
         self.btn_lectura.style().unpolish(self.btn_lectura)
         self.btn_lectura.style().polish(self.btn_lectura)
         self.btn_lectura.update()
+
+    # ---------- MENÚ HAMBURGUESA (Nivel 11 B5) ----------
+
+    def _construir_menu_hamburguesa(self):
+        m = self.menu_hamburguesa
+        self.act_restaurar = m.addAction("Restaurar sesión al iniciar")
+        self.act_restaurar.setCheckable(True)
+        self.act_restaurar.setChecked(
+            bool(self.prefs.get("restaurar_sesion", True)))
+        self.act_restaurar.triggered.connect(self._toggle_restaurar_sesion)
+
+        m.addSeparator()
+        self.act_lectura = m.addAction("Modo lectura (Ctrl+Alt+R)")
+        self.act_lectura.setCheckable(True)
+        self.act_lectura.triggered.connect(self.alternar_lectura)
+
+        m.addSeparator()
+        m.addAction("Zoom: Acercar (Ctrl+=)", self.zoom_mas)
+        m.addAction("Zoom: Alejar (Ctrl+-)", self.zoom_menos)
+        m.addAction("Zoom: Restablecer (Ctrl+0)", self.zoom_reset)
+
+        m.addSeparator()
+        m.addAction("Comprobar privacidad (página local)", self.abrir_privacidad)
+
+    def _abrir_menu_hamburguesa(self):
+        self.act_restaurar.setChecked(
+            bool(self.prefs.get("restaurar_sesion", True)))
+        self.act_lectura.setChecked(self.esta_en_lectura())
+        pos = self.btn_menu.mapToGlobal(self.btn_menu.rect().bottomLeft())
+        self.menu_hamburguesa.exec(pos)
+
+    def _toggle_restaurar_sesion(self, checked):
+        self.prefs.set("restaurar_sesion", bool(checked))
+        self.prefs.guardar()
 
     # ---------- BUSCAR EN LA PÁGINA ----------
 

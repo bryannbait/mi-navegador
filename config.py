@@ -3,7 +3,7 @@
 
 # --- Identidad ---
 NOMBRE = "MiNavegador"
-VERSION = "1.3"
+VERSION = "1.4"
 
 # --- Página de inicio del motor (Ctrl+clic en el botón del motor) ---
 HOME = "https://duckduckgo.com"

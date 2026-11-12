@@ -210,3 +210,32 @@ Notas de la última pasada:
 
 -
 
+## Nivel 11 — Menú hamburguesa e integración (B5)
+
+### Comprobación automática
+
+Ejecutada el 12/11/2026 en ventanas reales:
+
+| Escenario | Resultado observado | ✔ |
+|---|---|---|
+| Botón menú hamburguesa | Existe y abre un menú con las opciones del nivel | ✔ |
+| «Restaurar sesión al iniciar» | Alternar guarda `restaurar_sesion` en preferencias | ✔ |
+| «Modo lectura» | Alterna el overlay de la pestaña activa | ✔ |
+| Zoom desde el menú | Acercar / alejar / restablecen el zoom del sitio | ✔ |
+| «Comprobar privacidad» | Abre la página local de diagnóstico | ✔ |
+| `config.VERSION` | Vale `"1.4"` y se muestra en el título de la ventana | ✔ |
+
+### Checklist manual
+
+Fecha: ____ / ____ / ______
+
+| # | Comprobación | Cómo | Resultado esperado | ✔ |
+|---|---|---|---|---|
+| 1 | Menú hamburguesa | Clic en el botón ☰ de la barra de navegación | Se abre un menú con las 6 opciones | ☐ |
+| 2 | Restaurar sesión | Desactivar la casilla, cerrar y abrir | No se restaura la sesión anterior | ☐ |
+| 3 | Versión | Título de la ventana | Muestra "MiNavegador 1.4" | ☐ |
+
+Notas de la última pasada:
+
+-
+
