@@ -1307,10 +1307,11 @@ class MiNavegador(QMainWindow):
         self.sesion.guardar(pestanas, activa)
 
     def _restaurar_sesion(self):
-        """Reabre las pestañas guardadas, cargando solo la activa.
+        """Reabre las pestañas guardadas SIN cargar ninguna URL aún.
 
-        Crear 30 QWebEngineView tarda segundos, así que las demás se quedan
-        como marcadores ligeros y su vista se crea al activarlas.
+        Todas las pestañas empiezan como marcadores ligeros (QWidget).
+        La vista real (QWebEngineView) y la carga de la URL se hacen
+        solo cuando la pestaña recibe el foco por primera vez.
         """
         entradas = self.sesion.pestanas()
         if not entradas:
@@ -1321,18 +1322,12 @@ class MiNavegador(QMainWindow):
         self._restaurando = True
         try:
             for i, entrada in enumerate(entradas):
-                if i == activa:
-                    view = self._crear_vista()
-                    self.tabs.addTab(view, "Nueva pestaña")
-                    self._cargar_entrada(view, entrada)
-                    self._aplicar_fijada_silenciosa(i, entrada)
-                else:
-                    marcador = QWidget()
-                    self.tabs.addTab(marcador, self._titulo_entrada(entrada))
-                    self.tabs.setTabIcon(
-                        i, icono("home", config.COLOR_TEXTO_SUAVE, 16))
-                    self._aplicar_fijada_silenciosa(i, entrada)
-                    self._diferidas[id(marcador)] = entrada
+                marcador = QWidget()
+                self.tabs.addTab(marcador, self._titulo_entrada(entrada))
+                self.tabs.setTabIcon(
+                    i, icono("home", config.COLOR_TEXTO_SUAVE, 16))
+                self._aplicar_fijada_silenciosa(i, entrada)
+                self._diferidas[id(marcador)] = entrada
         finally:
             self._restaurando = False
 
@@ -1342,6 +1337,8 @@ class MiNavegador(QMainWindow):
         idx = activa
         if 0 <= idx < self.tabs.count():
             self.tabs.setCurrentIndex(idx)
+            # Materializar la pestaña activa AHORA (ya no estamos restaurando)
+            self._materializar(idx)
 
     def _aplicar_fijada_silenciosa(self, idx, entrada):
         """Marca la pestaña como fijada sin reordenar (ya viene ordenada)."""
