@@ -57,7 +57,9 @@ def configurar_perfil(gestor, anti_fingerprint_activo=None):
     # --- SSL: asegurar que QtWebEngine use los certificados del sistema Windows ---
 
     ssl_ok = QSslSocket.supportsSsl()
-    ca_certs = QSslSocket.defaultCaCertificates()
+    ca_certs = []
+    if hasattr(QSslSocket, "defaultCaCertificates"):
+        ca_certs = QSslSocket.defaultCaCertificates()
 
     print(f"[SSL] soporte SSL: {ssl_ok}")
     print(f"[SSL] certificados CA del sistema: {len(ca_certs)}")
