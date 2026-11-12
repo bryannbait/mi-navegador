@@ -26,11 +26,21 @@ class UserAgentTest(unittest.TestCase):
 
     def test_no_rompe_un_ua_sin_qt(self):
         ua = "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0.0.0"
-        self.assertEqual(af.limpiar_user_agent(ua), ua)
+        antes = config.UA_PERSONALIZADO
+        config.UA_PERSONALIZADO = None
+        try:
+            self.assertEqual(af.limpiar_user_agent(ua), ua)
+        finally:
+            config.UA_PERSONALIZADO = antes
 
     def test_ua_vacio_no_revienta(self):
-        self.assertEqual(af.limpiar_user_agent(""), "")
-        self.assertIsNone(af.limpiar_user_agent(None))
+        antes = config.UA_PERSONALIZADO
+        config.UA_PERSONALIZADO = None
+        try:
+            self.assertEqual(af.limpiar_user_agent(""), "")
+            self.assertIsNone(af.limpiar_user_agent(None))
+        finally:
+            config.UA_PERSONALIZADO = antes
 
     def test_ua_personalizado_manda(self):
         antes = config.UA_PERSONALIZADO

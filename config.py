@@ -48,5 +48,10 @@ FP_RUIDO_CANVAS = True
 # Manda la cabecera Sec-GPC: 1 (Global Privacy Control, "no vendas mis datos").
 FP_ENVIAR_GPC = True
 
-# Si algún día quieres un User-Agent concreto, ponlo aquí (None = automático).
-UA_PERSONALIZADO = None
+# User-Agent que se anuncia a las webs. Si es None, se usa el de QtWebEngine
+# limpiado (sin el token QtWebEngine). Poner uno realista de Chrome en Windows
+# ayuda a evitar CAPTCHAs en sitios que bloquean navegadores poco comunes.
+UA_PERSONALIZADO = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
