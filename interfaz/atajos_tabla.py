@@ -37,6 +37,9 @@ ATAJOS_GLOBALES = [
     # Navegación
     ("F5", "recargar_o_detener"),
     ("Ctrl+R", "recargar_o_detener"),
+    ("Ctrl+=", "zoom_mas"),
+    ("Ctrl+-", "zoom_menos"),
+    ("Ctrl+0", "zoom_reset"),
     ("Esc", "detener_actual"),
     ("Alt+Left", "atras_actual"),
     ("Alt+Right", "adelante_actual"),

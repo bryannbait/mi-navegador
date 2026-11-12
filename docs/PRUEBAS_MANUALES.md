@@ -146,3 +146,36 @@ Notas de la última pasada:
 
 -
 
+## Nivel 11 — Zoom por sitio
+
+### Comprobación automática
+
+Ejecutada el 12/11/2026 en ventanas reales:
+
+| Escenario | Resultado observado | ✔ |
+|---|---|---|
+| `Ctrl+=` en un host | Factor pasa de 1.0 a 1.1 y se muestra "Zoom: 110 %" en la barra de estado | ✔ |
+| Otro host distinto | Empieza en 1.0 (zoom es independiente por sitio) | ✔ |
+| Volver al primer host | Se restaura el 1.1 guardado | ✔ |
+| `datos/zoom.json` | Se crea con `{"127.0.0.1": 1.1}` | ✔ |
+| Reabrir la ventana | El zoom del sitio se reaplica al terminar la carga | ✔ |
+| Incógnito | No toca ni crea `datos/zoom.json` | ✔ |
+| `Ctrl+-` / `Ctrl+0` | Baja un paso y restablece a 1.0, respectivamente | ✔ |
+
+### Checklist manual
+
+Fecha: ____ / ____ / ______
+
+| # | Comprobación | Cómo | Resultado esperado | ✔ |
+|---|---|---|---|---|
+| 1 | Acercar | `Ctrl+=` varias veces | El texto crece en pasos de 10 %, hasta 200 % | ☐ |
+| 2 | Alejar | `Ctrl+-` | El texto se reduce, hasta 50 % | ☐ |
+| 3 | Restablecer | `Ctrl+0` | Vuelve al 100 % | ☐ |
+| 4 | Por sitio | Hacer zoom en un sitio, ir a otro y volver | Cada sitio recuerda su propio zoom | ☐ |
+| 5 | Persistencia | Cerrar y abrir el navegador | El zoom de cada sitio se recupera | ☐ |
+| 6 | Incógnito | Hacer zoom en incógnito y cerrar | No se crea `datos/zoom.json` | ☐ |
+
+Notas de la última pasada:
+
+-
+

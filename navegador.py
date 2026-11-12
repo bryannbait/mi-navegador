@@ -33,6 +33,9 @@ from interfaz import pagina_privacidad
 from assets.icons.helpers import icono
 from modelos import motores
 from modelos.sesion import Sesion, ordenar_fijadas
+from modelos.zoom import (
+    Zoom, host_de, FACTOR_DEFECTO, pasar_a_puntos,
+)
 import config
 
 
@@ -75,7 +78,7 @@ class MiNavegador(QMainWindow):
 
     def __init__(self, gestor, prefs, historial, favoritos, descargas,
                  perfil_web=None, interceptor_propio=None, es_incognito=False,
-                 sesion=None):
+                 sesion=None, zoom=None):
         super().__init__()
 
         self.gestor = gestor
@@ -93,6 +96,14 @@ class MiNavegador(QMainWindow):
             self.sesion = Sesion(None)
         else:
             self.sesion = Sesion()
+
+        # Zoom por sitio: en incógnito solo vive en memoria.
+        if zoom is not None:
+            self.zoom = zoom
+        elif es_incognito:
+            self.zoom = Zoom(None)
+        else:
+            self.zoom = Zoom()
 
         # Modo incógnito.
         self.es_incognito = es_incognito
@@ -114,6 +125,10 @@ class MiNavegador(QMainWindow):
         # Restauración diferida: marcadores en espera de crear su vista.
         self._diferidas = {}
         self._restaurando = False
+        # Zoom: hosts cuyo zoom tocó el usuario en esta sesión (se respetan)
+        # y host previo de cada vista (para detectar cambio de sitio).
+        self._zoom_tocado_sesion = set()
+        self._zoom_host_por_view = {}
         perfil = (perfil_web if perfil_web is not None
                   else QWebEngineProfile.defaultProfile())
         perfil.downloadRequested.connect(self._descarga_solicitada)
@@ -1179,6 +1194,58 @@ class MiNavegador(QMainWindow):
         self._cargar_entrada(view, entrada)
         self._aplicar_fijada_silenciosa(idx, entrada)
 
+    # ---------- ZOOM POR SITIO ----------
+
+    def _zoom_host_de(self, view):
+        if not isinstance(view, QWebEngineView):
+            return ""
+        return host_de(view.url())
+
+    def _zoom_aplicar(self, view, factor):
+        if not isinstance(view, QWebEngineView):
+            return
+        try:
+            view.setZoomFactor(factor)
+        except Exception:
+            pass
+
+    def _zoom_aplicar_vista(self, view):
+        """Aplica el zoom guardado del host de `view`, salvo que el usuario
+        ya haya tocado el zoom en esta sesión (ese se respeta)."""
+        host = self._zoom_host_de(view)
+        if not host or host in self._zoom_tocado_sesion:
+            return
+        factor = self.zoom.obtener(host)
+        self._zoom_aplicar(view, factor)
+
+    def _zoom_mostrar(self, factor):
+        self.statusBar().showMessage(f"Zoom: {pasar_a_puntos(factor)} %", 2000)
+
+    def zoom_mas(self):
+        self._zoom_cambiar(mas=True)
+
+    def zoom_menos(self):
+        self._zoom_cambiar(mas=False)
+
+    def zoom_reset(self):
+        self._zoom_cambiar(reset=True)
+
+    def _zoom_cambiar(self, mas=False, reset=False):
+        view = self.pestana_actual()
+        host = self._zoom_host_de(view)
+        if not host:
+            return
+        if reset:
+            self.zoom.restablecer(host)
+            factor = FACTOR_DEFECTO
+        else:
+            actual = view.zoomFactor() if isinstance(view, QWebEngineView) else 1.0
+            factor = self.zoom.ajuste(actual, mas=mas)
+            self.zoom.establecer(host, factor)
+        self._zoom_tocado_sesion.add(host)
+        self._zoom_aplicar(view, factor)
+        self._zoom_mostrar(factor)
+
     # ---------- BUSCAR EN LA PÁGINA ----------
 
     def abrir_busqueda(self):
@@ -1234,6 +1301,8 @@ class MiNavegador(QMainWindow):
         self._actualizar_estrella()
         self._actualizar_navegacion()
         self.actualizar_escudo()
+        # Zoom del sitio de esta pestaña (respeta lo elegido en la sesión).
+        self._zoom_aplicar_vista(view)
         # La búsqueda abierta sigue en la pestaña nueva.
         if self.busqueda.esta_abierta() and self.busqueda.texto():
             self._buscar_en_pagina(self.busqueda.texto())
@@ -1249,6 +1318,17 @@ class MiNavegador(QMainWindow):
             self._actualizar_candado(qurl)
             self._actualizar_estrella()
             self._actualizar_navegacion()
+
+        # Cambio de sitio: aplico el zoom guardado del nuevo host.
+        view = self.sender()
+        if isinstance(view, QWebEngineView):
+            host = host_de(qurl)
+            previo = self._zoom_host_por_view.get(id(view))
+            if host and previo != host:
+                self._zoom_host_por_view[id(view)] = host
+                if (not self.es_incognito
+                        and host not in self._zoom_tocado_sesion):
+                    self._zoom_aplicar_vista(view)
 
     def _on_title_changed(self, titulo):
         view = self.sender()
@@ -1289,6 +1369,7 @@ class MiNavegador(QMainWindow):
             # La página de inicio propia (data:) no es historial.
             if isinstance(view, QWebEngineView) and not self._es_url_vacia(view.url()):
                 self.historial.añadir(view.title(), url_a_texto(view.url()))
+                self._zoom_aplicar_vista(view)
 
     # ---------- TECLADO ----------
 
