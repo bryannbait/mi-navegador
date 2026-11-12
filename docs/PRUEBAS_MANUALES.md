@@ -40,4 +40,46 @@ Notas de la última pasada:
 
 ## Nivel 10 — Privacidad
 
-_(se completa en la fase A3)_
+### Comprobación automática (página local, sin red)
+
+Ejecutada el 12/11/2026 con el escudo activado, en una ventana real:
+
+| Dato | Valor observado | Esperado | ✔ |
+|---|---|---|---|
+| `navigator.userAgent` | `...Chrome/140.0.0.0 Safari/537.36` (sin `QtWebEngine`) | Sin rastro de Qt | ✔ |
+| `navigator.platform` | `Win32` | Coherente con el UA | ✔ |
+| `navigator.vendor` | `Google Inc.` | Genérico | ✔ |
+| Idioma / idiomas | `es-MX` / `es-MX, es, en-US, en` | Los de `config.py` | ✔ |
+| `hardwareConcurrency` | `8` | `FP_NUCLEOS` | ✔ |
+| `deviceMemory` | `8` | `FP_MEMORIA_GB` | ✔ |
+| GPC | `true` | `FP_ENVIAR_GPC` | ✔ |
+| `maxTouchPoints` / `webdriver` | `0` / `false` | Genéricos | ✔ |
+| Pantalla | `1366 × 768`, 24 bits | Resolución de escritorio común | ✔ |
+| `Intl` locale | `es-MX` | Igual que `navigator.language` | ✔ |
+| Plugins | `0` | — | ✔ |
+| Hash del canvas | `72b01e7a` (cambia en cada arranque) | Distinto por sesión | ✔ |
+| WebGL | `Google Inc. (Intel) · ANGLE (Intel, UHD Graphics 620…)` | Genérico | ✔ |
+| `navigator.userAgentData` | **no disponible** | — | ⚠ limitación conocida |
+
+La última fila es real: QtWebEngine no implementa `navigator.userAgentData`, así
+que la cabecera `Sec-CH-UA` y la API de JS no coinciden. Está documentado en
+`docs/PRIVACIDAD.md` como pendiente.
+
+### Checklist manual
+
+Fecha: ____ / ____ / ______
+
+| # | Comprobación | Cómo | Resultado esperado | ✔ |
+|---|---|---|---|---|
+| 1 | Página local con escudo ON | Escudo → «Comprobar mi huella» | Valores genéricos (tabla de arriba) | ☐ |
+| 2 | Página local con escudo OFF | Desactivar y recargar | Aparecen los valores reales del equipo | ☐ |
+| 3 | Cabeceras con escudo ON | `servidor_cabeceras.py` | Sin `QtWebEngine`, `Accept-Language` configurado, `Sec-GPC: 1` | ☐ |
+| 4 | Cabeceras con escudo OFF | Desactivar y recargar | UA original con `QtWebEngine`, sin `Sec-GPC` | ☐ |
+| 5 | Canvas estable | browserleaks.com/canvas, recargar dos veces | Mismo hash en la misma sesión; distinto tras reiniciar | ☐ |
+| 6 | WebGL | browserleaks.com/webgl | Vendor/renderer genéricos | ☐ |
+| 7 | Informe general | coveryourtracks.eff.org y creepjs | Sin valores únicos; el canvas no es el mismo que en Chrome | ☐ |
+
+Notas de la última pasada:
+
+-
+

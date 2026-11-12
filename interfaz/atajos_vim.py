@@ -290,6 +290,8 @@ class VimKeys(QObject):
             v._abrir_ventana_favoritos()
         elif cmd_lower in ("inc", "incognito"):
             v.abrir_incognito()
+        elif cmd_lower in ("privacidad", "privacy", "fp", "huella"):
+            v.abrir_privacidad()
         elif cmd_lower in ("top", "home"):
             v.inicio_actual()
         elif cmd_lower.startswith("open "):
@@ -316,6 +318,6 @@ class VimKeys(QObject):
             "j k: scroll   |   d/u: media página   |   gg / G: arriba/abajo\n"
             "f / F: atrás/adelante   |   r: recargar   |   i: foco al primer input\n"
             "t: nueva pestaña   |   x: cerrar   |   J / K: cambiar pestaña\n"
-            "H: inicio   |   /: buscar   |   :t :w :q :help :inc :open URL"
+            "H: inicio   |   /: buscar   |   :t :w :q :help :inc :priv :open URL"
         )
         self.indicador.mostrar(ayuda, 6000)

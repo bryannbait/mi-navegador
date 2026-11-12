@@ -29,6 +29,7 @@ from interfaz.barra_busqueda import BarraBusqueda
 from interfaz.puente_vim import PaginaVim, crear_script_vim
 from interfaz.pestanas import Pestanas
 from interfaz import pagina_inicio
+from interfaz import pagina_privacidad
 from assets.icons.helpers import icono
 from modelos import motores
 import config
@@ -659,6 +660,9 @@ class MiNavegador(QMainWindow):
             lambda _=False, a=acc: self._cambiar_anti_fingerprint(a.isChecked())
         )
 
+        acc = menu.addAction("Comprobar mi huella (página local)")
+        acc.triggered.connect(self.abrir_privacidad)
+
         pos = self.btn_escudo.mapToGlobal(self.btn_escudo.rect().bottomLeft())
         menu.exec(pos)
 
@@ -679,6 +683,15 @@ class MiNavegador(QMainWindow):
     def _perfil_actual(self):
         return (self.perfil_web if self.perfil_web is not None
                 else QWebEngineProfile.defaultProfile())
+
+    def abrir_privacidad(self):
+        """Abre la página local que muestra lo que una web ve de nosotros."""
+        activo = anti_fingerprint.esta_activo(self._perfil_actual())
+        view = self.nueva_pestana()
+        view.setHtml(pagina_privacidad.generar_html(activo))
+        idx = self.tabs.indexOf(view)
+        if idx != -1:
+            self.tabs.setTabText(idx, "Privacidad")
 
     def _cambiar_anti_fingerprint(self, activo):
         """Activa/desactiva la protección en el perfil de esta ventana.

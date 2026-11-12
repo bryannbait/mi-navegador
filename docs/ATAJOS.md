@@ -76,6 +76,7 @@ ni de la web).
 | `:hist` | Historial |
 | `:fav` | Favoritos |
 | `:inc` | Ventana de incógnito |
+| `:privacidad` / `:priv` | Página local de diagnóstico de privacidad |
 | `:top` | Página de inicio |
 | `:help` | Ayuda rápida |
 
