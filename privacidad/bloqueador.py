@@ -7,7 +7,7 @@ from PyQt6.QtWebEngineCore import (
 )
 
 import config
-import anti_fingerprint
+from . import anti_fingerprint
 
 
 # Mapeo de tipos de PyQt6 -> strings que espera adblock (estilo Brave/AdBlock).

@@ -5,9 +5,9 @@
 from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtWidgets import QApplication
 
-import anti_fingerprint
+from privacidad import anti_fingerprint
 import config
-from bloqueador import Bloqueador
+from privacidad.bloqueador import Bloqueador
 from navegador import MiNavegador
 from puente_vim import crear_script_vim
 from historial import Historial

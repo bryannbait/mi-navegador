@@ -27,7 +27,7 @@ except ImportError:
     print(r"O ejecuta: venv\Scripts\python.exe main.py")
     sys.exit(1)
 
-from gestor_bloqueo import GestorBloqueo
+from privacidad.gestor_bloqueo import GestorBloqueo
 from historial import Historial
 from favoritos import Favoritos
 from descargas import Descargas

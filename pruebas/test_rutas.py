@@ -5,7 +5,7 @@
 import os
 import unittest
 
-import gestor_bloqueo
+from privacidad import gestor_bloqueo
 import rutas
 from descargas import RUTA as RUTA_DESCARGAS
 from favoritos import RUTA as RUTA_FAVORITOS

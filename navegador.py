@@ -18,11 +18,11 @@ from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings
 )
 
-from bloqueador import Bloqueador
+from privacidad.bloqueador import Bloqueador
 from ventana_historial import VentanaHistorial
 from ventana_favoritos import VentanaFavoritos
 from ventana_descargas import VentanaDescargas
-import anti_fingerprint
+from privacidad import anti_fingerprint
 from atajos_vim import VimKeys
 from puente_vim import PaginaVim, crear_script_vim
 from pestanas import Pestanas
