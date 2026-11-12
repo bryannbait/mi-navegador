@@ -346,7 +346,9 @@ class MiNavegador(QMainWindow):
         # Comprobar en segundo plano si el motor de búsqueda responde. En
         # incógnito no hace falta: no se guarda ningún estado de esta sonda.
         if not self.es_incognito:
-            QTimer.singleShot(1500, self._comprobar_motor)
+            # Warmup inmediato: lanzar la sonda y la precarga en cuanto el loop
+            # de eventos esté libre, no esperar 1,5 s.
+            QTimer.singleShot(0, self._comprobar_motor)
 
     # ---------- MOTOR DE BÚSQUEDA: DISPONIBILIDAD ----------
 
@@ -416,6 +418,65 @@ class MiNavegador(QMainWindow):
                 print(f"[Búsqueda] {busqueda.nombre(clave)} responde de nuevo.",
                       flush=True)
             return
+
+        if clave not in self._motores_caidos:
+            self._motores_caidos.add(clave)
+            if clave == self.motor_actual:
+                self._actualizar_icono_motor()
+                self.statusBar().showMessage(
+                    f"{busqueda.nombre(clave)} no responde en tu red. "
+                    f"Las búsquedas usarán {busqueda.nombre(self._motor_efectivo())}.",
+                    8000)
+                self._refrescar_inicios()
+                # Aviso legible en la consola: los errores de red de Chromium
+                # quedan silenciados (ver config.CHROMIUM_FLAGS).
+                print(f"[Búsqueda] {busqueda.nombre(clave)} no responde en tu "
+                      f"red; las búsquedas usarán "
+                      f"{busqueda.nombre(self._motor_efectivo())}.", flush=True)
+
+    def _precargar_motor(self, clave):
+        """Carga la home del motor en una vista oculta para calentar la conexión.
+
+        Esto hace que la primera búsqueda del usuario sea instantánea porque:
+        - DNS ya resuelto
+        - TCP/TLS handshake ya hecho
+        - Socket pool de Chromium caliente
+        - Posible HSTS/HPKP cacheado
+
+        La vista se destruye sola al terminar (deleteLater).
+        """
+        motor = motores.obtener(clave)
+        url_home = motor.get("url_home")
+        if not url_home:
+            return
+
+        # Evitar precargas duplicadas simultáneas
+        if getattr(self, f"_precarga_{clave}", None) is not None:
+            return
+
+        view = QWebEngineView()
+        # No mostrar, no añadir a pestañas, sin foco
+        view.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        view.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        view.resize(1, 1)
+        view.move(-10000, -10000)
+
+        # Usar el mismo perfil que las pestañas reales
+        perfil = (self.perfil_web if self.perfil_web is not None
+                  else perfil_persistente())
+        page = PaginaVim(perfil, view)
+        view.setPage(page)
+
+        def _fin(ok):
+            # Limpiar referencia para permitir otra precarga futura
+            setattr(self, f"_precarga_{clave}", None)
+            view.deleteLater()
+            if ok:
+                print(f"[Búsqueda] {busqueda.nombre(clave)} precargado.", flush=True)
+
+        setattr(self, f"_precarga_{clave}", view)
+        view.loadFinished.connect(_fin)
+        view.setUrl(QUrl(url_home))
 
         if clave not in self._motores_caidos:
             self._motores_caidos.add(clave)
