@@ -4,8 +4,10 @@
 import json
 import os
 
+from rutas import RUTA_DATOS
 
-RUTA = os.path.join(os.path.dirname(__file__), "preferencias.json")
+
+RUTA = os.path.join(RUTA_DATOS, "preferencias.json")
 
 
 class Preferencias:
@@ -36,6 +38,9 @@ class Preferencias:
 
     def guardar(self):
         try:
+            carpeta = os.path.dirname(self.ruta)
+            if carpeta:
+                os.makedirs(carpeta, exist_ok=True)
             with open(self.ruta, "w", encoding="utf-8") as f:
                 json.dump(self.datos, f, ensure_ascii=False, indent=2)
         except OSError:

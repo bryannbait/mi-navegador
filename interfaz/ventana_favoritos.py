@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
     QListWidgetItem, QPushButton, QLabel, QInputDialog
 )
 from PyQt6.QtCore import Qt
-import config
 
 
 class VentanaFavoritos(QDialog):

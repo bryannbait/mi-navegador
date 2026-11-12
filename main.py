@@ -27,12 +27,13 @@ except ImportError:
     print(r"O ejecuta: venv\Scripts\python.exe main.py")
     sys.exit(1)
 
-from gestor_bloqueo import GestorBloqueo
-from historial import Historial
-from favoritos import Favoritos
-from descargas import Descargas
-from preferencias import Preferencias
-from navegador import MiNavegador, configurar_perfil, aplicar_tema
+from privacidad.gestor_bloqueo import GestorBloqueo
+from modelos.historial import Historial
+from modelos.favoritos import Favoritos
+from modelos.descargas import Descargas
+from modelos.preferencias import Preferencias
+from navegador import MiNavegador, configurar_perfil
+from estilos import aplicar_tema
 import config
 
 

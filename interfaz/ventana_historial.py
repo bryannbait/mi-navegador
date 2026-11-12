@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
     QListWidgetItem, QPushButton, QLabel
 )
 from PyQt6.QtCore import Qt
-import config
 
 
 class VentanaHistorial(QDialog):

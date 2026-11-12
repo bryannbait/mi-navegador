@@ -1,3 +1,4 @@
-PyQt6
-PyQt6-WebEngine
-adblock
+# Versiones con las que se probó el proyecto (Python 3.14, Windows).
+PyQt6==6.11.0
+PyQt6-WebEngine==6.11.0
+adblock==0.6.0

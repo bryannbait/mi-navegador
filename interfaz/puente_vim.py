@@ -7,7 +7,7 @@ from urllib.parse import parse_qs
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineScript
 
-from pagina_inicio import PREFIJO_BUSQUEDA
+from .pagina_inicio import PREFIJO_BUSQUEDA
 
 
 PREFIJO = "VIM_INPUT_"

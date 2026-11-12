@@ -1,0 +1,11 @@
+# Configuración de herramientas de desarrollo.
+# La app no se empaqueta: esto solo configura el linter.
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+exclude = ["venv", "datos", "__pycache__"]
+
+[tool.ruff.lint]
+# Mismos grupos que trae ruff por defecto: errores y nombres sin usar.
+select = ["E4", "E7", "E9", "F"]

@@ -1,8 +1,8 @@
 venv/
 __pycache__/
 *.pyc
+.ruff_cache/
 
-# Datos personales: no subirlos a git
-historial.json
-favoritos.json
-descargas.json
+# Datos personales de ejecución (historial, favoritos, descargas, preferencias,
+# whitelist): no subirlos a git
+datos/

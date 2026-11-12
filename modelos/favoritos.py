@@ -4,10 +4,11 @@
 import os
 from datetime import datetime
 
-from modelo_json import ModeloJSON
+from .modelo_json import ModeloJSON
+from rutas import RUTA_DATOS
 
 
-RUTA = os.path.join(os.path.dirname(__file__), "favoritos.json")
+RUTA = os.path.join(RUTA_DATOS, "favoritos.json")
 
 
 class Favoritos(ModeloJSON):
