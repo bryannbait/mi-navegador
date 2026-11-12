@@ -27,6 +27,7 @@ from interfaz.atajos_vim import VimKeys
 from interfaz.atajos_tabla import ATAJOS_GLOBALES
 from interfaz.barra_busqueda import BarraBusqueda
 from interfaz.puente_vim import PaginaVim, crear_script_vim
+from interfaz.modo_lectura import generar_css, JS_BUSCAR_ARTICULO, js_literal
 from interfaz.pestanas import Pestanas
 from interfaz import pagina_inicio
 from interfaz import pagina_privacidad
@@ -129,6 +130,8 @@ class MiNavegador(QMainWindow):
         # y host previo de cada vista (para detectar cambio de sitio).
         self._zoom_tocado_sesion = set()
         self._zoom_host_por_view = {}
+        # Modo lectura: estado por vista (bool). No se persiste.
+        self._lectura_por_view = {}
         perfil = (perfil_web if perfil_web is not None
                   else QWebEngineProfile.defaultProfile())
         perfil.downloadRequested.connect(self._descarga_solicitada)
@@ -219,6 +222,10 @@ class MiNavegador(QMainWindow):
         btn_inc = self._boton_icono("eye-off", "Nueva ventana de incógnito (Ctrl+Shift+N)",
                                     self.abrir_incognito)
         btn_desc = self._boton_icono("download", "Descargas (Ctrl+J)", self.abrir_panel_descargas)
+        self.btn_lectura = self._boton_icono("book-open", "Modo lectura (Ctrl+Alt+R)",
+                                             self.alternar_lectura)
+        self.btn_lectura.setCheckable(True)
+        self.btn_lectura.setChecked(False)
 
         fila_nav = QHBoxLayout()
         fila_nav.setContentsMargins(8, 4, 8, 6)
@@ -227,7 +234,8 @@ class MiNavegador(QMainWindow):
                   self.btn_motor):
             fila_nav.addWidget(w)
         fila_nav.addWidget(self.barra, 1)
-        for w in (self.btn_escudo, btn_fav, self.btn_historial, btn_inc, btn_desc):
+        for w in (self.btn_escudo, btn_fav, self.btn_historial, btn_inc, btn_desc,
+                  self.btn_lectura):
             fila_nav.addWidget(w)
 
         # --- Fila 3: marcadores ---
@@ -967,6 +975,8 @@ class MiNavegador(QMainWindow):
                 self.interceptor_actual.olvidar_pestana(id(widget))
         if widget is not None:
             self._diferidas.pop(id(widget), None)
+            self._zoom_host_por_view.pop(id(widget), None)
+            self._lectura_por_view.pop(id(widget), None)
         self.tabs.removeTab(idx)
         if widget is not None:
             widget.deleteLater()
@@ -1193,6 +1203,7 @@ class MiNavegador(QMainWindow):
         self.tabs.reemplazar_pagina(idx, view)
         self._cargar_entrada(view, entrada)
         self._aplicar_fijada_silenciosa(idx, entrada)
+        self._lectura_por_view[id(view)] = False
 
     # ---------- ZOOM POR SITIO ----------
 
@@ -1245,6 +1256,98 @@ class MiNavegador(QMainWindow):
         self._zoom_tocado_sesion.add(host)
         self._zoom_aplicar(view, factor)
         self._zoom_mostrar(factor)
+
+    # ---------- MODO LECTURA ----------
+
+    def _js_activar_lectura(self):
+        """JS inline que busca el artículo y lo muestra en un overlay."""
+        css = js_literal(generar_css())
+        return (
+            "(function(){"
+            "var ID='mn-lector';"
+            "if(document.getElementById(ID)) return 'ya-activo';"
+            + JS_BUSCAR_ARTICULO
+            + "var a=_encontrar();"
+            + "if(!a) return 'sin-articulo';"
+            + "var c=a.cloneNode(true);"
+            + "var o=document.createElement('div');"
+            + "o.id=ID;"
+            + "var btn=document.createElement('button');"
+            + "btn.id='mn-lector-salir';"
+            + "btn.textContent='Salir';"
+            + "btn.onclick=function(){var x=document.getElementById(ID);"
+            + " if(x) x.remove();};"
+            + "o.appendChild(btn);"
+            + "var cont=document.createElement('div');"
+            + "cont.id='mn-lector-contenido';"
+            + "cont.appendChild(c);"
+            + "o.appendChild(cont);"
+            + "document.body.appendChild(o);"
+            + "var s=document.createElement('style');"
+            + "s.textContent=" + css + ";"
+            + "document.head.insertBefore(s, document.head.firstChild);"
+            + "return 'ok';"
+            + "})()"
+        )
+
+    def _js_desactivar_lectura(self):
+        return ("(function(){"
+                 "var o=document.getElementById('mn-lector');"
+                 "if(o) o.remove();"
+                 "return 'ok';"
+                 "})()")
+
+    def alternar_lectura(self):
+        view = self.pestana_actual()
+        if not isinstance(view, QWebEngineView):
+            return
+        vid = id(view)
+        # Consulta el estado real en el DOM (el boton Salir del overlay puede
+        # haberlo desactivado sin pasar por Python).
+        view.page().runJavaScript(
+            "!!document.getElementById('mn-lector')",
+            lambda res, vid=vid, view=view: self._alternar_después(
+                vid, res, view))
+
+    def _alternar_después(self, vid, tiene_overlay, view):
+        if tiene_overlay:
+            view.page().runJavaScript(
+                self._js_desactivar_lectura(),
+                lambda res, vid=vid: self._despues_lectura(vid, False, None))
+        else:
+            view.page().runJavaScript(
+                self._js_activar_lectura(),
+                lambda res, vid=vid: self._despues_lectura(
+                    vid, res == "ok", res))
+
+    def _despues_lectura(self, vid, activo, resultado):
+        self._lectura_por_view[vid] = bool(activo)
+        if not activo and resultado == "sin-articulo":
+            view = self.tabs.widget(self.tabs.currentIndex())
+            if view is not None and id(view) == vid:
+                self.statusBar().showMessage(
+                    "No se detectó un artículo en esta página", 3000)
+        self._actualizar_boton_lectura()
+
+    def esta_en_lectura(self, view=None):
+        if view is None:
+            view = self.pestana_actual()
+        if not isinstance(view, QWebEngineView):
+            return False
+        return bool(self._lectura_por_view.get(id(view), False))
+
+    def _actualizar_boton_lectura(self):
+        activa = self.esta_en_lectura()
+        self.btn_lectura.setChecked(activa)
+        if activa:
+            self.btn_lectura.setObjectName("btn_lectura_activo")
+            self.btn_lectura.setToolTip("Salir del modo lectura (Ctrl+Alt+R)")
+        else:
+            self.btn_lectura.setObjectName("btn_lectura")
+            self.btn_lectura.setToolTip("Modo lectura (Ctrl+Alt+R)")
+        self.btn_lectura.style().unpolish(self.btn_lectura)
+        self.btn_lectura.style().polish(self.btn_lectura)
+        self.btn_lectura.update()
 
     # ---------- BUSCAR EN LA PÁGINA ----------
 
@@ -1329,6 +1432,10 @@ class MiNavegador(QMainWindow):
                 if (not self.es_incognito
                         and host not in self._zoom_tocado_sesion):
                     self._zoom_aplicar_vista(view)
+
+        # Nueva URL: sale del modo lectura de la página anterior.
+        if isinstance(view, QWebEngineView):
+            self._lectura_por_view[id(view)] = False
 
     def _on_title_changed(self, titulo):
         view = self.sender()

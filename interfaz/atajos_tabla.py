@@ -40,6 +40,7 @@ ATAJOS_GLOBALES = [
     ("Ctrl+=", "zoom_mas"),
     ("Ctrl+-", "zoom_menos"),
     ("Ctrl+0", "zoom_reset"),
+    ("Ctrl+Alt+R", "alternar_lectura"),
     ("Esc", "detener_actual"),
     ("Alt+Left", "atras_actual"),
     ("Alt+Right", "adelante_actual"),

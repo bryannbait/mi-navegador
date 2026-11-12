@@ -17,6 +17,7 @@ Funcionan en cualquier pestaña, también con el foco dentro de la página.
 | `Ctrl+Shift+T` | Reabrir la última pestaña cerrada (hasta 10) |
 | `Ctrl+Shift+P` | Fijar o desfijar la pestaña actual |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom: acercar / alejar / restablecer |
+| `Ctrl+Alt+R` | Modo lectura (alternar) |
 | `Ctrl+Tab` / `Ctrl+PgDown` | Pestaña siguiente |
 | `Ctrl+Shift+Tab` / `Ctrl+PgUp` | Pestaña anterior |
 | `Ctrl+1` … `Ctrl+8` | Ir a la pestaña 1–8 |
@@ -80,15 +81,8 @@ ni de la web).
 | `:inc` | Ventana de incógnito |
 | `:privacidad` / `:priv` | Página local de diagnóstico de privacidad |
 | `:top` | Página de inicio |
+| `:lector` | Modo lectura (alternar) |
 | `:help` | Ayuda rápida |
-
-## Pendiente en esta iteración
-
-Estos atajos se añadirán en sus fases y aparecerán en la tabla al implementarse:
-
-| Atajo | Fase | Acción |
-|---|---|---|
-| `Ctrl+Alt+R` | B4 | Modo lectura |
 
 ## Reglas de diseño
 

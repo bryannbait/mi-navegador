@@ -294,6 +294,8 @@ class VimKeys(QObject):
             v.abrir_privacidad()
         elif cmd_lower in ("top", "home"):
             v.inicio_actual()
+        elif cmd_lower in ("lector", "lectura", "read"):
+            v.alternar_lectura()
         elif cmd_lower.startswith("open "):
             destino = cmd[5:].strip()
             if destino:
@@ -318,6 +320,6 @@ class VimKeys(QObject):
             "j k: scroll   |   d/u: media página   |   gg / G: arriba/abajo\n"
             "f / F: atrás/adelante   |   r: recargar   |   i: foco al primer input\n"
             "t: nueva pestaña   |   x: cerrar   |   J / K: cambiar pestaña\n"
-            "H: inicio   |   /: buscar   |   :t :w :q :help :inc :priv :open URL"
+            "H: inicio   |   /: buscar   |   :t :w :q :help :inc :privacidad :lector :open URL"
         )
         self.indicador.mostrar(ayuda, 6000)

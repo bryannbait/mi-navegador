@@ -83,6 +83,16 @@ def hoja_de_estilos():
         background-color: {t.COLOR_SUPERFICIE_2};
     }}
 
+    /* ---- botón modo lectura ---- */
+    QPushButton#btn_lectura, QPushButton#btn_lectura_activo {{
+        background: transparent; border: none; border-radius: 6px;
+    }}
+    QPushButton#btn_lectura:hover, QPushButton#btn_lectura_activo:hover {{
+        background-color: {t.COLOR_SUPERFICIE_2};
+    }}
+    QPushButton#btn_lectura_activo {{ color: {t.COLOR_ACENTO}; }}
+    QPushButton#btn_lectura_activo:hover {{ background-color: {t.COLOR_ACENTO_FUERTE}; }}
+
     /* ---- barra de direcciones ---- */
     QLineEdit {{
         background-color: {t.COLOR_SUPERFICIE}; color: {t.COLOR_TEXTO};

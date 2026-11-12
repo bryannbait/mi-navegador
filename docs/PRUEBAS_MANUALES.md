@@ -179,3 +179,34 @@ Notas de la última pasada:
 
 -
 
+## Nivel 11 — Modo lectura
+
+### Comprobación automática
+
+Ejecutada el 12/11/2026 en ventanas reales:
+
+| Escenario | Resultado observado | ✔ |
+|---|---|---|
+| `Ctrl+Alt+R` en un artículo | Se crea el overlay `#mn-lector` con el artículo clonado y el botón "Salir" | ✔ |
+| `Ctrl+Alt+R` otra vez | El overlay se quita y la página vuelve al estado original | ✔ |
+| Página sin artículo (menos de 300 caracteres o sin párrafos) | No se toca la página; se avisa «No se detectó un artículo» | ✔ |
+| Botón de la barra «Lectura» | Alterna igual que `Ctrl+Alt+R` y se marca cuando está activo | ✔ |
+| Comando `:lector` (Vim) | Alternar igual que el atajo | ✔ |
+| Recargar la página | Sale del modo lectura (no se persiste) | ✔ |
+
+### Checklist manual
+
+Fecha: ____ / ____ / ______
+
+| # | Comprobación | Cómo | Resultado esperado | ✔ |
+|---|---|---|---|---|
+| 1 | Activar | `Ctrl+Alt+R` en un artículo (Wikipedia, diario, blog) | Se ve el overlay con el texto del artículo, tipografía legible y botón «Salir» | ☐ |
+| 2 | Desactivar | Pulsar «Salir` o `Ctrl+Alt+R` otra vez | El overlay desaparece y la página vuelve a verse normal | ☐ |
+| 3 | Sin artículo | Ir a una página sin contenido principal (ej. página de inicio vacía) | No se crea overlay; aparece el aviso en la barra de estado | ☐ |
+| 4 | Botón de la barra | Pulsar el botón «Lectura» | Se marca/desmarca y alterna el overlay | ☐ |
+| 5 | No persistencia | Activar lectura y recargar la página | Sale del modo lectura al recargar | ☐ |
+
+Notas de la última pasada:
+
+-
+
