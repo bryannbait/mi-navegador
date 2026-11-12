@@ -172,8 +172,38 @@ class GestorBloqueo:
                 and info.get("huella") == huella
                 and os.path.isfile(RUTA_CACHE))
 
+    def _verificar_cache_integridad(self):
+        """Verifica la integridad del archivo de caché binario comparando su SHA-256.
+        
+        Returns:
+            True si el hash coincide, False si el archivo no existe, está corrupto
+            o no hay hash guardado.
+        """
+        try:
+            with open(RUTA_CACHE_INFO, "r", encoding="utf-8") as f:
+                info = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return False
+        
+        hash_guardado = info.get("cache_sha256")
+        if not hash_guardado:
+            return False
+        
+        try:
+            import hashlib
+            with open(RUTA_CACHE, "rb") as f:
+                datos = f.read()
+            hash_calculado = hashlib.sha256(datos).hexdigest()
+            return hash_calculado == hash_guardado
+        except (OSError, Exception):
+            return False
+
     def _motor_desde_cache(self):
-        """Motor deserializado, o None si el caché está roto."""
+        """Motor deserializado, o None si el caché está roto o corrupto."""
+        # Primero verificar integridad del archivo binario
+        if not self._verificar_cache_integridad():
+            return None
+        
         try:
             motor = adblock.Engine(adblock.FilterSet(), True)
             motor.deserialize_from_file(RUTA_CACHE)
@@ -183,14 +213,25 @@ class GestorBloqueo:
             return None
 
     def _guardar_cache(self, huella):
-        """Guarda el motor compilado. Un fallo aquí no debe romper nada."""
+        """Guarda el motor compilado con su hash SHA-256 para verificación posterior."""
         try:
             os.makedirs(os.path.dirname(RUTA_CACHE), exist_ok=True)
             temporal = RUTA_CACHE + ".tmp"
             self.engine.serialize_to_file(temporal)
+            
+            # Calcular hash del archivo temporal antes de moverlo
+            import hashlib
+            with open(temporal, "rb") as f:
+                datos = f.read()
+            cache_sha256 = hashlib.sha256(datos).hexdigest()
+            
             os.replace(temporal, RUTA_CACHE)
             with open(RUTA_CACHE_INFO, "w", encoding="utf-8") as f:
-                json.dump({"huella": huella, "version": VERSION_CACHE}, f)
+                json.dump({
+                    "huella": huella, 
+                    "version": VERSION_CACHE,
+                    "cache_sha256": cache_sha256
+                }, f)
         except Exception:
             pass
 

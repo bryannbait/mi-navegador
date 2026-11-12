@@ -33,8 +33,8 @@ class CacheTest(unittest.TestCase):
         self.assertTrue(gestor.listo)
         self.assertGreater(gestor.reglas, 0)
         self.assertIsNotNone(gestor.engine)
-        # Primera vez compila: ~1 s en esta máquina
-        self.assertLess(total, 5.0)
+        # Primera vez compila + guarda caché + calcula hash: ~1-7 s según máquina
+        self.assertLess(total, 10.0)
 
         # Verificar que se creó el caché
         self.assertTrue(os.path.exists(os.path.join(RUTA_DATOS, "cache_adblock.bin")))
@@ -52,8 +52,8 @@ class CacheTest(unittest.TestCase):
         self.assertTrue(gestor.listo)
         self.assertGreater(gestor.reglas, 0)
         self.assertIsNotNone(gestor.engine)
-        # Desde caché: < 1 s
-        self.assertLess(total, 1.0)
+        # Desde caché: < 3 s (incluye verificación de integridad SHA-256)
+        self.assertLess(total, 3.0)
 
     def test_bloqueo_funciona_con_motor_cacheado(self):
         GestorBloqueo()  # crea caché

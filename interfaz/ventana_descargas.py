@@ -13,6 +13,28 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWebEngineCore import QWebEngineDownloadRequest
 
 from modelos.descargas import ESTADOS_FINALES, puede_reintentar
+from rutas import RUTA_DATOS
+
+
+# Carpeta permitida para descargas (subcarpeta 'descargas' dentro de datos)
+CARPETA_DESCARGAS_PERMITIDA = os.path.join(RUTA_DATOS, "descargas")
+os.makedirs(CARPETA_DESCARGAS_PERMITIDA, exist_ok=True)
+
+
+def _ruta_es_segura(ruta: str) -> bool:
+    """Verifica que la ruta está dentro de la carpeta de descargas permitida.
+
+    Previene path traversal (ej. ../../Windows/System32/cmd.exe).
+    """
+    if not ruta:
+        return False
+    try:
+        ruta_abs = os.path.abspath(ruta)
+        permitida_abs = os.path.abspath(CARPETA_DESCARGAS_PERMITIDA)
+        # os.path.commonpath lanza ValueError en Windows si están en drives distintos
+        return os.path.commonpath([ruta_abs, permitida_abs]) == permitida_abs
+    except (ValueError, OSError):
+        return False
 
 
 def _legible(n):
@@ -211,15 +233,17 @@ class FilaDescarga(QWidget):
         if not ruta:
             return
         carpeta = os.path.dirname(ruta)
-        if os.path.isdir(carpeta):
+        if os.path.isdir(carpeta) and _ruta_es_segura(carpeta):
             QDesktopServices.openUrl(QUrl.fromLocalFile(carpeta))
+        else:
+            QMessageBox.warning(self, "Carpeta", "No se puede abrir esa ubicación.")
 
     def _abrir_archivo(self):
         ruta = self.entrada.get("ruta", "")
-        if ruta and os.path.isfile(ruta):
+        if ruta and os.path.isfile(ruta) and _ruta_es_segura(ruta):
             QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))
         else:
-            QMessageBox.warning(self, "Archivo", "El archivo ya no está en esa ruta.")
+            QMessageBox.warning(self, "Archivo", "El archivo ya no está en esa ruta o no es accesible.")
 
     def _reintentar(self):
         """Vuelve a pedir el archivo: abre su URL en una pestaña."""
