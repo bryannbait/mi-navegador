@@ -83,3 +83,34 @@ Notas de la última pasada:
 
 -
 
+## Nivel 11 — Sesión y pestañas
+
+### Comprobación automática
+
+Ejecutada el 12/11/2026 en ventanas reales:
+
+| Escenario | Resultado observado | ✔ |
+|---|---|---|
+| Guardar 3 pestañas (una de inicio) al cerrar | `sesion.json` con `version: 1`, `activa: 1` y las URLs en orden | ✔ |
+| Reabrir | 3 pestañas, mismas URLs y la misma activa | ✔ |
+| Restauración diferida | Al arrancar solo hay 1 `QWebEngineView`; las demás son marcadores. Al pulsar otra pestaña se crea su vista (21 ms) y carga su URL | ✔ |
+| Incógnito | Abre y cierra pestañas sin tocar `sesion.json` | ✔ |
+| 30 pestañas guardadas | Construcción de la ventana: **0,53 s** (antes 4,44 s creando las 30 vistas); primera página cargada en 0,95 s | ✔ |
+| Modelo (`pruebas/test_sesion.py`) | 21 pruebas: corrupción, versión distinta, tope, clamps, memoria | ✔ |
+
+### Checklist manual
+
+Fecha: ____ / ____ / ______
+
+| # | Comprobación | Cómo | Resultado esperado | ✔ |
+|---|---|---|---|---|
+| 1 | Ida y vuelta real | Abrir 4 pestañas con sitios distintos, cerrar la ventana y volver a abrir | Se reabren en el mismo orden; la activa es la misma | ☐ |
+| 2 | Solo la activa carga al arrancar | Abrir 10 pestañas, cerrar y reabrir | Solo la activa descarga de inmediato; las demás cargan al pulsarlas | ☐ |
+| 3 | Archivo corrupto | Cerrar, estropear `datos/sesion.json` a mano y abrir | Arranca con una pestaña de inicio; el archivo se reescribe al cerrar | ☐ |
+| 4 | Incógnito | Abrir incógnito, navegar y cerrar; luego abrir la ventana normal | La sesión normal no cambia | ☐ |
+| 5 | Restauración desactivada | (B5) Desactivar «Restaurar sesión» en el menú y cerrar | No se guarda nada; al abrir sale una pestaña nueva | ☐ |
+
+Notas de la última pasada:
+
+-
+

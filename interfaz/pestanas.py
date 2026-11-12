@@ -45,6 +45,24 @@ class Pestanas(QObject):
         self._paginas.append(widget)
         return self.barra.addTab(texto)
 
+    def reemplazar_pagina(self, idx, widget):
+        """Cambia la página de una pestaña sin tocar el texto ni el icono.
+
+        Se usa al "materializar" una pestaña restaurada en espera: hasta que
+        no se activa no existe su QWebEngineView.
+        """
+        viejo = self.widget(idx)
+        if viejo is None:
+            return None
+        self.paginas.insertWidget(idx, widget)
+        self._paginas.insert(idx, widget)
+        self.paginas.removeWidget(viejo)
+        self._paginas.pop(idx + 1)
+        viejo.deleteLater()
+        if idx == self.currentIndex():
+            self.paginas.setCurrentWidget(widget)
+        return viejo
+
     def removeTab(self, idx):
         if not 0 <= idx < len(self._paginas):
             return

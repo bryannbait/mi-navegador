@@ -32,6 +32,7 @@ from interfaz import pagina_inicio
 from interfaz import pagina_privacidad
 from assets.icons.helpers import icono
 from modelos import motores
+from modelos.sesion import Sesion
 import config
 
 
@@ -73,7 +74,8 @@ def configurar_perfil(gestor, anti_fingerprint_activo=None):
 class MiNavegador(QMainWindow):
 
     def __init__(self, gestor, prefs, historial, favoritos, descargas,
-                 perfil_web=None, interceptor_propio=None, es_incognito=False):
+                 perfil_web=None, interceptor_propio=None, es_incognito=False,
+                 sesion=None):
         super().__init__()
 
         self.gestor = gestor
@@ -83,6 +85,14 @@ class MiNavegador(QMainWindow):
         self.historial = historial
         self.favoritos = favoritos
         self.descargas = descargas
+
+        # Sesión: en incógnito nunca toca el disco (ruta=None).
+        if sesion is not None:
+            self.sesion = sesion
+        elif es_incognito:
+            self.sesion = Sesion(None)
+        else:
+            self.sesion = Sesion()
 
         # Modo incógnito.
         self.es_incognito = es_incognito
@@ -101,6 +111,9 @@ class MiNavegador(QMainWindow):
 
         # Pestañas cerradas recientes (Ctrl+Shift+T). Solo en memoria.
         self._cerradas = []
+        # Restauración diferida: marcadores en espera de crear su vista.
+        self._diferidas = {}
+        self._restaurando = False
         perfil = (perfil_web if perfil_web is not None
                   else QWebEngineProfile.defaultProfile())
         perfil.downloadRequested.connect(self._descarga_solicitada)
@@ -255,7 +268,15 @@ class MiNavegador(QMainWindow):
 
         self._crear_atajos()
         self._refrescar_barra_favoritos()
-        self.nueva_pestana()
+
+        # Al abrir: restaurar la sesión anterior (si está activada) o una
+        # pestaña nueva. En incógnito siempre se empieza de cero.
+        if (not self.es_incognito
+                and self.prefs.get("restaurar_sesion", True)
+                and not self.sesion.vacia()):
+            self._restaurar_sesion()
+        else:
+            self.nueva_pestana()
 
     # ---------- AYUDAS DE INTERFAZ ----------
 
@@ -298,7 +319,7 @@ class MiNavegador(QMainWindow):
     def _actualizar_navegacion(self):
         """Activa/desactiva atrás y adelante según el historial de la pestaña."""
         v = self.pestana_actual()
-        hist = v.history() if v is not None else None
+        hist = v.history() if isinstance(v, QWebEngineView) else None
         self.btn_atras.setEnabled(bool(hist and hist.canGoBack()))
         self.btn_adelante.setEnabled(bool(hist and hist.canGoForward()))
 
@@ -735,7 +756,7 @@ class MiNavegador(QMainWindow):
 
     def _actualizar_estrella(self):
         view = self.pestana_actual()
-        if view is None:
+        if not isinstance(view, QWebEngineView):
             return
         if self.es_incognito:
             self.accion_estrella.setIcon(icono("star", config.COLOR_TEXTO_SUAVE, 18))
@@ -854,6 +875,10 @@ class MiNavegador(QMainWindow):
         if self._panel_descargas is not None:
             self._panel_descargas.close()
         if not self.es_incognito:
+            if self.prefs.get("restaurar_sesion", True):
+                self._guardar_sesion()
+            else:
+                self.sesion.borrar()
             self.historial.guardar()
             self.favoritos.guardar()
             self.descargas.guardar()
@@ -863,9 +888,27 @@ class MiNavegador(QMainWindow):
     # ---------- PESTAÑAS ----------
 
     def pestana_actual(self):
+        # Si la pestaña activa venía de la sesión y aún no tiene vista, se
+        # crea ahora: quien pregunta espera una QWebEngineView de verdad.
+        if not self._restaurando:
+            self._materializar(self.tabs.currentIndex())
         return self.tabs.currentWidget()
 
     def nueva_pestana(self, url=None):
+        view = self._crear_vista()
+
+        idx = self.tabs.addTab(view, "Nueva pestaña")
+        self.tabs.setTabIcon(idx, icono("home", config.COLOR_TEXTO_SUAVE, 16))
+        self.tabs.setCurrentIndex(idx)
+        if url:
+            view.setUrl(QUrl(url))
+        else:
+            view.setHtml(self._html_inicio())
+            view.setFocus()
+        return view
+
+    def _crear_vista(self):
+        """Crea una pestaña de verdad (QWebEngineView) con sus señales."""
         view = QWebEngineView()
 
         perfil = (self.perfil_web if self.perfil_web is not None
@@ -885,23 +928,17 @@ class MiNavegador(QMainWindow):
 
         if self.interceptor_actual is not None:
             self.interceptor_actual.registrar_pestana(id(view))
-
-        idx = self.tabs.addTab(view, "Nueva pestaña")
-        self.tabs.setTabIcon(idx, icono("home", config.COLOR_TEXTO_SUAVE, 16))
-        self.tabs.setCurrentIndex(idx)
-        if url:
-            view.setUrl(QUrl(url))
-        else:
-            view.setHtml(self._html_inicio())
-            view.setFocus()
         return view
 
     def cerrar_pestana(self, idx):
         widget = self.tabs.widget(idx)
-        if widget is not None:
+        es_vista = isinstance(widget, QWebEngineView)
+        if es_vista:
             self._anotar_cerrada(widget.url())
-        if widget is not None and self.interceptor_actual is not None:
-            self.interceptor_actual.olvidar_pestana(id(widget))
+            if self.interceptor_actual is not None:
+                self.interceptor_actual.olvidar_pestana(id(widget))
+        if widget is not None:
+            self._diferidas.pop(id(widget), None)
         self.tabs.removeTab(idx)
         if widget is not None:
             widget.deleteLater()
@@ -943,6 +980,102 @@ class MiNavegador(QMainWindow):
         else:
             self.showFullScreen()
 
+    # ---------- SESIÓN ----------
+
+    def _estado_sesion(self):
+        """Pestañas que hay ahora y cuál está activa, listas para guardar."""
+        pestanas = []
+        activa = 0
+        actual = self.tabs.currentIndex()
+        for i in range(self.tabs.count()):
+            view = self.tabs.widget(i)
+            if view is None:
+                continue
+            diferida = self._diferidas.get(id(view))
+            if diferida is not None:
+                # Pestaña restaurada que aún no se ha abierto: se guarda tal
+                # cual estaba, sin crear la vista.
+                pestanas.append(dict(diferida))
+            elif (not isinstance(view, QWebEngineView)
+                    or self._es_url_vacia(view.url())
+                    or view.url().scheme() not in ("http", "https")):
+                # La página de inicio propia no se restaura: se abre nueva.
+                pestanas.append({"nueva": True})
+            else:
+                pestanas.append({
+                    "url": url_a_texto(view.url()),
+                    "titulo": view.title(),
+                })
+            if i == actual:
+                activa = len(pestanas) - 1
+        return pestanas, activa
+
+    def _guardar_sesion(self):
+        pestanas, activa = self._estado_sesion()
+        self.sesion.guardar(pestanas, activa)
+
+    def _restaurar_sesion(self):
+        """Reabre las pestañas guardadas, cargando solo la activa.
+
+        Crear 30 QWebEngineView tarda segundos, así que las demás se quedan
+        como marcadores ligeros y su vista se crea al activarlas.
+        """
+        entradas = self.sesion.pestanas()
+        if not entradas:
+            self.nueva_pestana()
+            return
+
+        activa = self.sesion.activa()
+        self._restaurando = True
+        try:
+            for i, entrada in enumerate(entradas):
+                if i == activa:
+                    view = self._crear_vista()
+                    self.tabs.addTab(view, "Nueva pestaña")
+                    self._cargar_entrada(view, entrada)
+                else:
+                    marcador = QWidget()
+                    self.tabs.addTab(marcador, self._titulo_entrada(entrada))
+                    self.tabs.setTabIcon(
+                        i, icono("home", config.COLOR_TEXTO_SUAVE, 16))
+                    self._diferidas[id(marcador)] = entrada
+        finally:
+            self._restaurando = False
+
+        if self.tabs.count() == 0:
+            self.nueva_pestana()
+            return
+        idx = self.sesion.activa()
+        if 0 <= idx < self.tabs.count():
+            self.tabs.setCurrentIndex(idx)
+
+    @staticmethod
+    def _titulo_entrada(entrada):
+        if entrada.get("nueva"):
+            return "Nueva pestaña"
+        return (entrada.get("titulo") or entrada.get("url") or "Nueva pestaña")
+
+    def _cargar_entrada(self, view, entrada):
+        if entrada.get("nueva"):
+            view.setHtml(self._html_inicio())
+        else:
+            view.setUrl(QUrl(entrada.get("url")))
+            self.tabs.setTabIcon(
+                self.tabs.indexOf(view),
+                icono("home", config.COLOR_TEXTO_SUAVE, 16))
+
+    def _materializar(self, idx):
+        """Crea la vista real de una pestaña restaurada que estaba en espera."""
+        marcador = self.tabs.widget(idx)
+        if marcador is None:
+            return
+        entrada = self._diferidas.pop(id(marcador), None)
+        if entrada is None:
+            return
+        view = self._crear_vista()
+        self.tabs.reemplazar_pagina(idx, view)
+        self._cargar_entrada(view, entrada)
+
     # ---------- BUSCAR EN LA PÁGINA ----------
 
     def abrir_busqueda(self):
@@ -950,7 +1083,7 @@ class MiNavegador(QMainWindow):
 
     def _buscar_en_pagina(self, texto, atras=False):
         view = self.pestana_actual()
-        if view is None:
+        if not isinstance(view, QWebEngineView):
             return
         if not texto:
             view.page().findText("")
@@ -962,7 +1095,7 @@ class MiNavegador(QMainWindow):
 
     def _limpiar_busqueda(self):
         view = self.pestana_actual()
-        if view is not None:
+        if isinstance(view, QWebEngineView):
             view.page().findText("")
 
     def _on_busqueda_terminada(self, resultado):
@@ -981,6 +1114,11 @@ class MiNavegador(QMainWindow):
             self.cerrar_pestana(idx)
 
     def cambio_de_pestana(self, idx):
+        # Durante la restauración las pestañas aún son marcadores vacíos; no
+        # hay nada que mostrar ni que crear hasta que el usuario las abra.
+        if self._restaurando:
+            return
+        self._materializar(idx)
         view = self.tabs.widget(idx)
         if view is None:
             return
@@ -1108,5 +1246,5 @@ class MiNavegador(QMainWindow):
             self.busqueda.cerrar()
             return
         v = self.pestana_actual()
-        if v:
+        if isinstance(v, QWebEngineView):
             v.stop()
