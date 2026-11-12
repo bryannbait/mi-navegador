@@ -10,6 +10,23 @@ import config
 from modelos import busqueda, motores
 
 
+class OrdenPorDefectoTest(unittest.TestCase):
+    """Orden pedido: 1.º Brave Search, 2.º Google."""
+
+    def test_brave_primero_google_segundo(self):
+        self.assertEqual(config.MOTOR_RESPALDO, "google")
+        self.assertEqual(busqueda.elegir("brave", set()), "brave")
+        self.assertEqual(busqueda.elegir("brave", {"brave"}), "google")
+
+    def test_url_de_respaldo_es_google(self):
+        url, clave = busqueda.url_busqueda("brave", "youtube", {"brave"})
+        self.assertEqual(clave, "google")
+        self.assertEqual(url, "https://www.google.com/search?q=youtube")
+
+    def test_google_como_elegido_no_se_cambia(self):
+        self.assertEqual(busqueda.elegir("google", {"brave"}), "google")
+
+
 class ElegirTest(unittest.TestCase):
 
     def test_motor_normal_si_responde(self):

@@ -244,12 +244,13 @@ Notas de la última pasada:
 
 Ejecutada en ventana real con el motor configurado en Brave Search, que en esta
 red no responde (la conexión se reinicia en el saludo TLS; le pasa igual a
-Brave Browser, así que no es el navegador).
+Brave Browser, así que no es el navegador). Orden: 1.º Brave Search,
+2.º Google.
 
 | Escenario | Resultado observado | ✔ |
 |---|---|---|
-| Restaurar una pestaña con Brave Search | Se detecta el fallo y se repite la búsqueda en DuckDuckGo | ✔ |
-| Escribir una búsqueda en la barra | Va directa a DuckDuckGo, sin página de error | ✔ |
+| Restaurar una pestaña con Brave Search | Se detecta el fallo y se repite la búsqueda en Google | ✔ |
+| Escribir una búsqueda en la barra | Va directa a Google, sin página de error | ✔ |
 | Aviso en la barra de estado | Indica que el motor no responde y cuál se usa | ✔ |
 | Preferencia del motor | No se modifica: sigue siendo la elegida | ✔ |
 | Sonda de disponibilidad | No bloquea la interfaz ni cierra la app | ✔ |

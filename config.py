@@ -69,4 +69,5 @@ CHROMIUM_FLAGS = [
 # Si el motor elegido no responde (red que corta ese dominio, caída del
 # servicio...), las búsquedas se hacen con este en vez de fallar. Se avisa en
 # la barra de estado. Pon None para desactivar el respaldo.
-MOTOR_RESPALDO = "duckduckgo"
+# Orden actual: 1.º Brave Search, 2.º Google.
+MOTOR_RESPALDO = "google"
