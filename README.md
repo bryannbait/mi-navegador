@@ -55,29 +55,40 @@ falta PyQt6 y se relanza solo con el venv del proyecto.
 mi-navegador/
 ├── main.py              punto de entrada
 ├── config.py            tema, versión y opciones de privacidad
+├── rutas.py             rutas absolutas (datos/, listas/, assets/)
 ├── navegador.py         ventana principal (MiNavegador)
 ├── estilos.py           hoja QSS + paleta oscura
-├── pestanas.py          barra de pestañas
-├── pagina_inicio.py     página de nueva pestaña (HTML generado)
-├── motores.py           catálogo de buscadores
-├── modelo_json.py       persistencia base (JSON)
-├── historial.py         modelo de historial   + ventana_historial.py
-├── favoritos.py         modelo de favoritos   + ventana_favoritos.py
-├── descargas.py         modelo de descargas   + ventana_descargas.py
-├── preferencias.py      ajustes del navegador
-├── ventana_incognito.py ventana de incógnito
-├── bloqueador.py        interceptor de red
-├── gestor_bloqueo.py    motor adblock + whitelist
-├── anti_fingerprint.py  privacidad / huella digital
-├── atajos_vim.py        atajos estilo Vim
-├── puente_vim.py        detector de inputs en la web
+├── privacidad/
+│   ├── anti_fingerprint.py  UA, idiomas y camuflaje de APIs
+│   ├── bloqueador.py        interceptor de red
+│   └── gestor_bloqueo.py    motor adblock + whitelist
+├── modelos/
+│   ├── modelo_json.py   persistencia base (JSON)
+│   ├── historial.py     historial
+│   ├── favoritos.py     favoritos
+│   ├── descargas.py     descargas
+│   ├── preferencias.py  ajustes del navegador
+│   └── motores.py       catálogo de buscadores
+├── interfaz/
+│   ├── pestanas.py      barra de pestañas
+│   ├── pagina_inicio.py página de nueva pestaña (HTML generado)
+│   ├── atajos_vim.py    atajos estilo Vim
+│   ├── puente_vim.py    detector de inputs en la web
+│   ├── ventana_historial.py
+│   ├── ventana_favoritos.py
+│   ├── ventana_descargas.py
+│   └── ventana_incognito.py
 ├── assets/icons/        iconos SVG + helpers.py
 ├── listas/              EasyList y EasyPrivacy
 ├── datos/               estado local (ignorado por git)
 ├── docs/                notas, guía de estudio y privacidad
 ├── pruebas/             pruebas unitarias (unittest)
 ├── iniciar.bat
-└── requirements.txt
+├── pruebas.bat
+├── requirements.txt
+├── requirements-dev.txt herramientas de desarrollo (ruff)
+├── pyproject.toml       configuración de ruff
+└── README.md
 ```
 
 ## Datos
@@ -86,10 +97,12 @@ Todo el estado local vive en `datos/` y está ignorado por git:
 `historial.json`, `favoritos.json`, `descargas.json`, `preferencias.json` y
 `whitelist.json`. El modo incógnito no escribe en esta carpeta.
 
-## Pruebas
+## Pruebas y linter
 
 ```bat
+venv\Scripts\pip install -r requirements-dev.txt
 venv\Scripts\python.exe -m unittest discover -s pruebas -v
+venv\Scripts\ruff.exe check .
 ```
 
 O doble clic en `pruebas.bat`.

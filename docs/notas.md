@@ -6,23 +6,19 @@
 - main.py           → punto de entrada (crea los modelos y la ventana)
 - navegador.py      → clase MiNavegador (la ventana)
 - estilos.py        → hoja de estilos QSS + paleta oscura
-- bloqueador.py     → interceptor de red (+ cabecera Sec-GPC)
-- gestor_bloqueo.py → motor adblock (Rust)
-- anti_fingerprint.py → Nivel 10: UA limpio, idiomas y camuflaje de APIs
-- historial.py      → modelo historial
-- ventana_historial.py
-- favoritos.py      → modelo favoritos
-- ventana_favoritos.py
-- descargas.py      → modelo descargas
-- ventana_descargas.py
-- ventana_incognito.py → ventana incógnito (modelos solo en RAM + perfil protegido)
-- atajos_vim.py     → atajos estilo Vim
-- puente_vim.py     → detecta si el foco está en un input de la web
-- requirements.txt  → dependencias (pip install -r requirements.txt)
-- preferencias.py   → ajustes
-- motores.py        → catálogo de buscadores
+- rutas.py          → rutas absolutas: datos/, listas/ y assets/
 - config.py         → colores, versión y opciones de privacidad
+- privacidad/       → anti_fingerprint.py (Nivel 10), bloqueador.py (red + Sec-GPC)
+                      y gestor_bloqueo.py (motor adblock Rust)
+- modelos/          → modelo_json.py, historial.py, favoritos.py, descargas.py,
+                      preferencias.py y motores.py
+- interfaz/         → pestanas.py, pagina_inicio.py, atajos_vim.py, puente_vim.py
+                      y las ventanas de historial, favoritos, descargas e incógnito
+- requirements.txt  → dependencias (pip install -r requirements.txt)
+- requirements-dev.txt → herramientas de desarrollo (ruff)
+- pyproject.toml    → configuración de ruff
 - iniciar.bat       → lanzador con doble clic
+- pruebas.bat       → lanzador de pruebas
 - datos/            → estado local: historial, favoritos, descargas, preferencias y whitelist
 - docs/             → esta nota, guía de estudio, PRIVACIDAD.md y el leeme del rediseño
 - pruebas/          → pruebas unitarias (unittest)
@@ -43,6 +39,10 @@ O en CMD, sin activar nada:
 ## Pruebas:
   venv\Scripts\python.exe -m unittest discover -s pruebas -v
   (o doble clic en pruebas.bat)
+
+## Linter:
+  venv\Scripts\pip install -r requirements-dev.txt
+  venv\Scripts\ruff.exe check .
 
 Nota: si ejecutas "python main.py" con el Python del sistema, main.py
 detecta que falta PyQt6 y se relanza solo con el venv del proyecto.

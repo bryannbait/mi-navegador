@@ -159,9 +159,11 @@ class VimKeys(QObject):
             view.page().runJavaScript(f"window.scrollBy(0, {dy});")
 
         if texto == "j":
-            scroll(80); return True
+            scroll(80)
+            return True
         if texto == "k":
-            scroll(-80); return True
+            scroll(-80)
+            return True
 
         if texto == "d":
             view.page().runJavaScript(
@@ -181,25 +183,33 @@ class VimKeys(QObject):
             return True
 
         if texto == "f":
-            v.atras_actual(); return True
+            v.atras_actual()
+            return True
         if texto == "F":
-            v.adelante_actual(); return True
+            v.adelante_actual()
+            return True
 
         if texto == "r":
-            v.recargar_o_detener(); return True
+            v.recargar_o_detener()
+            return True
 
         if texto == "t":
-            v.nueva_pestana(); return True
+            v.nueva_pestana()
+            return True
         if texto == "x":
-            v.cerrar_pestana_actual(); return True
+            v.cerrar_pestana_actual()
+            return True
 
         if texto == "J":
-            v.siguiente_pestana(); return True
+            v.siguiente_pestana()
+            return True
         if texto == "K":
-            v.pestana_anterior(); return True
+            v.pestana_anterior()
+            return True
 
         if texto == "H":
-            v.inicio_actual(); return True
+            v.inicio_actual()
+            return True
 
         if texto == "?":
             self._mostrar_ayuda()
