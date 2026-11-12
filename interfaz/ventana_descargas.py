@@ -12,6 +12,30 @@ from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWebEngineCore import QWebEngineDownloadRequest
 
+from modelos.descargas import ESTADOS_FINALES, puede_reintentar
+from rutas import RUTA_DATOS
+
+
+# Carpeta permitida para descargas (subcarpeta 'descargas' dentro de datos)
+CARPETA_DESCARGAS_PERMITIDA = os.path.join(RUTA_DATOS, "descargas")
+os.makedirs(CARPETA_DESCARGAS_PERMITIDA, exist_ok=True)
+
+
+def _ruta_es_segura(ruta: str) -> bool:
+    """Verifica que la ruta está dentro de la carpeta de descargas permitida.
+
+    Previene path traversal (ej. ../../Windows/System32/cmd.exe).
+    """
+    if not ruta:
+        return False
+    try:
+        ruta_abs = os.path.abspath(ruta)
+        permitida_abs = os.path.abspath(CARPETA_DESCARGAS_PERMITIDA)
+        # os.path.commonpath lanza ValueError en Windows si están en drives distintos
+        return os.path.commonpath([ruta_abs, permitida_abs]) == permitida_abs
+    except (ValueError, OSError):
+        return False
+
 
 def _legible(n):
     """Convierte bytes a un texto corto: 1536 -> '1.5 KB'."""
@@ -31,6 +55,7 @@ class FilaDescarga(QWidget):
         self.entrada = entrada        # dict del modelo Descargas
         self.panel = parent           # VentanaDescargas (tiene .gestor)
         self._terminada = False
+        self._pausada = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
@@ -74,6 +99,12 @@ class FilaDescarga(QWidget):
         self.btn_abrir.setEnabled(False)
         botones.addWidget(self.btn_abrir)
 
+        # Solo aparece en el historial: vuelve a pedir el archivo al servidor.
+        self.btn_reintentar = QPushButton("Reintentar")
+        self.btn_reintentar.clicked.connect(self._reintentar)
+        self.btn_reintentar.setVisible(False)
+        botones.addWidget(self.btn_reintentar)
+
         botones.addStretch()
         layout.addLayout(botones)
 
@@ -86,9 +117,10 @@ class FilaDescarga(QWidget):
             # Fila del historial: no hay descarga viva, solo mostramos el
             # resultado guardado (y desactivamos Pausar/Cancelar).
             estado = entrada.get("estado", "completada")
-            if estado not in ("completada", "cancelada", "interrumpida"):
+            if estado not in ESTADOS_FINALES:
                 estado = "interrumpida"
             self._terminar(estado, guardar=False)
+            self.btn_reintentar.setVisible(puede_reintentar(entrada))
 
     # ---------- EVENTOS ----------
 
@@ -115,23 +147,31 @@ class FilaDescarga(QWidget):
         elif estado == S.DownloadCancelled:
             self._terminar("cancelada")
         elif estado == S.DownloadInterrupted:
-            self._terminar("interrumpida")
+            try:
+                motivo = self.download.interruptReasonString()
+            except Exception:
+                motivo = ""
+            self._terminar("interrumpida", motivo=motivo)
 
-    def _terminar(self, estado, guardar=True):
+    def _terminar(self, estado, guardar=True, motivo=""):
         """Deja la fila en un estado final y lo anota en el modelo."""
         if self._terminada:
             return
         self._terminada = True
 
-        # Tamaño final y estado, en el modelo (y a disco).
-        self.entrada["estado"] = estado
+        # Solo la descarga viva escribe en el modelo. Las filas del historial
+        # comparten el mismo dict: si escribieran, una descarga en curso
+        # aparecería como interrumpida solo por abrir el panel.
         if self.download is not None:
+            self.entrada["estado"] = estado
             total = self.download.totalBytes()
             self.entrada["tamano"] = (
                 total if total > 0 else self.download.receivedBytes()
             )
-        if guardar and self.panel is not None:
-            self.panel.gestor.guardar()
+            if motivo:
+                self.entrada["motivo"] = motivo
+            if guardar and self.panel is not None:
+                self.panel.gestor.guardar()
 
         self.btn_pausa.setEnabled(False)
         self.btn_cancelar.setEnabled(False)
@@ -147,26 +187,41 @@ class FilaDescarga(QWidget):
         fecha = self.entrada.get("fecha", "")
         if fecha:
             detalle += f" · {fecha}"
+        motivo = motivo or self.entrada.get("motivo", "")
+        if motivo and estado == "interrumpida":
+            detalle += f" · {motivo}"
+
         textos = {
-            "completada": "✅ Completada",
-            "cancelada": "❌ Cancelada",
-            "interrumpida": "⚠️ Interrumpida",
+            "completada": "Completada",
+            "cancelada": "Cancelada",
+            "interrumpida": "Interrumpida",
+        }
+        colores = {
+            "completada": config.COLOR_OK,
+            "cancelada": config.COLOR_TEXTO_SUAVE,
+            "interrumpida": config.COLOR_AVISO,
         }
         self.lbl_estado.setText(textos[estado] + detalle)
+        self.lbl_estado.setStyleSheet(
+            f"color: {colores[estado]}; font-size: 11px;"
+        )
 
     # ---------- ACCIONES ----------
 
     def _pausar_reanudar(self):
-        if self.download is None:
+        if self.download is None or self._terminada:
             return
-        if self.download.isPaused():
+        # Llevamos el estado nosotros: isPaused() de Qt tarda un instante en
+        # reflejar pause(), y con dos clics rápidos se podía pausar dos veces.
+        self._pausada = not self._pausada
+        if self._pausada:
+            self.download.pause()
+            self.btn_pausa.setText("Reanudar")
+            self.lbl_estado.setText("Pausada")
+        else:
             self.download.resume()
             self.btn_pausa.setText("Pausar")
             self.lbl_estado.setText("Descargando…")
-        else:
-            self.download.pause()
-            self.btn_pausa.setText("Reanudar")
-            self.lbl_estado.setText("⏸ Pausada")
 
     def _cancelar(self):
         # Al cancelar, la descarga emite stateChanged y _on_estado hace el resto.
@@ -178,23 +233,34 @@ class FilaDescarga(QWidget):
         if not ruta:
             return
         carpeta = os.path.dirname(ruta)
-        if os.path.isdir(carpeta):
+        if os.path.isdir(carpeta) and _ruta_es_segura(carpeta):
             QDesktopServices.openUrl(QUrl.fromLocalFile(carpeta))
+        else:
+            QMessageBox.warning(self, "Carpeta", "No se puede abrir esa ubicación.")
 
     def _abrir_archivo(self):
         ruta = self.entrada.get("ruta", "")
-        if ruta and os.path.isfile(ruta):
+        if ruta and os.path.isfile(ruta) and _ruta_es_segura(ruta):
             QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))
         else:
-            QMessageBox.warning(self, "Archivo", "El archivo ya no está en esa ruta.")
+            QMessageBox.warning(self, "Archivo", "El archivo ya no está en esa ruta o no es accesible.")
+
+    def _reintentar(self):
+        """Vuelve a pedir el archivo: abre su URL en una pestaña."""
+        url = (self.entrada.get("url") or "").strip()
+        abrir = getattr(self.panel, "abrir_url", None)
+        if not url or abrir is None:
+            return
+        abrir(url)
 
 
 class VentanaDescargas(QDialog):
     """Panel con la lista de descargas activas e históricas."""
 
-    def __init__(self, gestor_descargas, parent=None):
+    def __init__(self, gestor_descargas, abrir_url=None, parent=None):
         super().__init__(parent)
         self.gestor = gestor_descargas
+        self.abrir_url = abrir_url   # callable(url) para "Reintentar"
         self.filas = {}  # id(download) -> FilaDescarga
 
         self.setWindowTitle("Descargas")
@@ -235,7 +301,11 @@ class VentanaDescargas(QDialog):
 
         # Cargar el historial previo (sin descarga viva). Vamos de la más
         # antigua a la más nueva porque cada fila nueva se pone ARRIBA.
+        # Las que están "en curso" ya tienen (o tendrán) su fila viva: si
+        # aparecieran aquí, se verían duplicadas y como interrumpidas.
         for entrada in reversed(self.gestor.todos()):
+            if entrada.get("estado") == "en curso":
+                continue
             self.añadir_descarga(None, entrada)
 
     def añadir_descarga(self, download, entrada):

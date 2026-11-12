@@ -83,6 +83,16 @@ def hoja_de_estilos():
         background-color: {t.COLOR_SUPERFICIE_2};
     }}
 
+    /* ---- botón modo lectura ---- */
+    QPushButton#btn_lectura, QPushButton#btn_lectura_activo {{
+        background: transparent; border: none; border-radius: 6px;
+    }}
+    QPushButton#btn_lectura:hover, QPushButton#btn_lectura_activo:hover {{
+        background-color: {t.COLOR_SUPERFICIE_2};
+    }}
+    QPushButton#btn_lectura_activo {{ color: {t.COLOR_ACENTO}; }}
+    QPushButton#btn_lectura_activo:hover {{ background-color: {t.COLOR_ACENTO_FUERTE}; }}
+
     /* ---- barra de direcciones ---- */
     QLineEdit {{
         background-color: {t.COLOR_SUPERFICIE}; color: {t.COLOR_TEXTO};
@@ -96,6 +106,21 @@ def hoja_de_estilos():
     }}
     QLineEdit#barra_direcciones:hover {{ border-color: {t.COLOR_BORDE}; }}
     QLineEdit#barra_direcciones:focus {{ border: 1px solid {t.COLOR_ACENTO}; }}
+
+    /* ---- buscar en la página (Ctrl+F) ---- */
+    QWidget#barra_busqueda {{ background: transparent; }}
+    QLineEdit#campo_busqueda {{
+        border: 1px solid {t.COLOR_BORDE}; border-radius: 12px;
+        min-height: 26px; padding: 0 10px; font-size: 12px;
+    }}
+    QLineEdit#campo_busqueda:focus {{ border: 1px solid {t.COLOR_ACENTO}; }}
+    QPushButton#btn_busqueda {{
+        background: transparent; border: none; border-radius: 6px;
+    }}
+    QPushButton#btn_busqueda:hover {{
+        background-color: {t.COLOR_SUPERFICIE_2};
+    }}
+    QLabel#resultado_busqueda {{ font-size: 11px; }}
 
     /* ---- favoritos ---- */
     QToolBar#barra_favoritos {{

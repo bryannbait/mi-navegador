@@ -21,6 +21,7 @@ class Preferencias:
             "motor_busqueda": "duckduckgo",
             "mostrar_barra_favoritos": True,
             "anti_fingerprint": True,
+            "restaurar_sesion": True,
         }
         if not os.path.exists(self.ruta):
             return por_defecto

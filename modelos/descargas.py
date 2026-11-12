@@ -11,6 +11,23 @@ from rutas import RUTA_DATOS
 RUTA = os.path.join(RUTA_DATOS, "descargas.json")
 MAX_ENTRADAS = 200
 
+# Estados finales posibles de una descarga.
+ESTADOS_FINALES = ("completada", "cancelada", "interrumpida")
+
+
+def puede_reintentar(entrada):
+    """True si la descarga se puede volver a lanzar abriendo su URL.
+
+    Qt no permite reanudar una descarga cuya petición ya murió, así que el
+    "reintento" es volver a pedir el archivo desde el principio.
+    """
+    if not entrada:
+        return False
+    if entrada.get("estado") not in ("interrumpida", "cancelada"):
+        return False
+    url = (entrada.get("url") or "").strip()
+    return url.startswith(("http://", "https://"))
+
 
 class Descargas(ModeloJSON):
 

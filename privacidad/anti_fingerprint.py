@@ -444,11 +444,19 @@ _JS = r"""
 # GENERACIÓN E INSTALACIÓN DEL SCRIPT
 # ---------------------------------------------------------------------------
 
-def generar_js(ua):
-    """Devuelve el código JS con los valores de config ya inyectados."""
+def generar_js(ua, sal_sesion=None):
+    """Devuelve el código JS con los valores de config ya inyectados.
+
+    Args:
+        ua: User-Agent string para generar Client Hints coherentes.
+        sal_sesion: Salt de 32 bits para el ruido de canvas. Si es None,
+            se usa la sal global (compatibilidad hacia atrás).
+    """
     idiomas = list(config.FP_IDIOMAS) or ["es-MX"]
+    if sal_sesion is None:
+        sal_sesion = SAL_SESION
     reemplazos = {
-        "__SAL__": str(SAL_SESION),
+        "__SAL__": str(sal_sesion),
         "__IDIOMAS__": json.dumps(idiomas, ensure_ascii=False),
         "__IDIOMA__": json.dumps(idiomas[0], ensure_ascii=False),
         "__PLATAFORMA_JS__": json.dumps(plataforma_js(ua), ensure_ascii=False),
@@ -465,10 +473,17 @@ def generar_js(ua):
 
 
 def crear_script(perfil):
-    """Crea el QWebEngineScript para este perfil (mundo principal)."""
+    """Crea el QWebEngineScript para este perfil (mundo principal).
+
+    La sal se lee del perfil (propiedad 'sal_sesion') para que cada perfil
+    (normal, incógnito) tenga su propia semilla de ruido.
+    """
+    sal = perfil.property("sal_sesion")
+    if sal is None:
+        sal = SAL_SESION
     script = QWebEngineScript()
     script.setName(NOMBRE_SCRIPT)
-    script.setSourceCode(generar_js(perfil.httpUserAgent()))
+    script.setSourceCode(generar_js(perfil.httpUserAgent(), sal_sesion=sal))
     script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
     # MainWorld: tiene que ser el mismo mundo que ve la web; si no, las webs
     # no verían nuestras reescrituras de navigator/canvas.
@@ -519,12 +534,17 @@ def preparar_perfil(perfil, activo=None):
 
     Se llama una vez por perfil (normal e incógnito). Guardamos los valores
     originales en el perfil para poder restaurarlos si se desactiva.
+    Cada perfil recibe su propia sal de sesión para el ruido de canvas,
+    evitando correlación entre ventana normal e incógnito.
     """
     if perfil.property("ua_original") is None:
         perfil.setProperty("ua_original", perfil.httpUserAgent())
         perfil.setProperty(
             "accept_language_original", perfil.httpAcceptLanguage()
         )
+    # Generar sal única por perfil si no existe
+    if perfil.property("sal_sesion") is None:
+        perfil.setProperty("sal_sesion", secrets.randbits(32))
     if activo is None:
         activo = config.ANTI_FINGERPRINT
     aplicar(perfil, activo)

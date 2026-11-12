@@ -3,10 +3,7 @@
 
 # --- Identidad ---
 NOMBRE = "MiNavegador"
-VERSION = "1.3"
-
-# --- Página de inicio del motor (Ctrl+clic en el botón del motor) ---
-HOME = "https://duckduckgo.com"
+VERSION = "1.4"
 
 # --- Paleta del tema: oscuro sobrio + acento violeta ---
 # Cambia COLOR_ACENTO* y todo el navegador cambia de color de acento.
@@ -48,5 +45,40 @@ FP_RUIDO_CANVAS = True
 # Manda la cabecera Sec-GPC: 1 (Global Privacy Control, "no vendas mis datos").
 FP_ENVIAR_GPC = True
 
-# Si algún día quieres un User-Agent concreto, ponlo aquí (None = automático).
-UA_PERSONALIZADO = None
+# User-Agent que se anuncia a las webs. Si es None, se usa el de QtWebEngine
+# limpiado (sin el token QtWebEngine). Poner uno realista de Chrome en Windows
+# ayuda a evitar CAPTCHAs en sitios que bloquean navegadores poco comunes.
+UA_PERSONALIZADO = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
+
+# --- Rendimiento: Chromium / QtWebEngine ---
+# Flags que se aplican al motor antes de crear la ventana.
+# Medidos en este equipo: --disable-extensions da ~30 % menos en MiNavegador()
+# y --disable-background-networking ~46 % menos en show().
+# Ver pruebas/bench_flags.py para la metodología.
+CHROMIUM_FLAGS = [
+    "--enable-gpu-rasterization",
+    "--enable-native-gpu-memory-buffers",
+    "--disable-background-timer-throttling",
+    "--disable-extensions",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-default-apps",
+    "--disable-background-networking",
+    "--renderer-process-limit=2",
+    # Solo errores fatales en la consola. Los fallos de red esperados (por
+    # ejemplo un motor de búsqueda bloqueado por la red) ya se explican con
+    # nuestro propio mensaje; el ruido de Chromium solo asusta.
+    "--log-level=3",
+]
+
+# --- Motores de búsqueda: orden de preferencia ---
+# El primero es el principal. Si no responde (red que corta el dominio, caída
+# del servicio...) o devuelve una página de verificación (CAPTCHA), se pasa al
+# siguiente. Se avisa en la barra de estado.
+# Orden actual: 1.º Brave Search, 2.º Google, 3.º DuckDuckGo (red de seguridad).
+MOTORES_RESPALDO = ["google", "duckduckgo"]
+
+# Minutos que se deja de usar un motor que pidió CAPTCHA antes de reintentarlo.
+MOTOR_ESPERA_MINUTOS = 20

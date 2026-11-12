@@ -15,7 +15,7 @@ except ImportError:
     VENV = os.path.join(RAIZ, "venv", "Scripts", "python.exe")
     if (os.path.isfile(VENV)
             and os.path.normcase(os.path.abspath(sys.executable))
-            != os.path.normcase(os.path.abspath(VENV))):
+            != os.normcase(os.path.abspath(VENV))):
         # subprocess entrecomilla bien la ruta aunque tenga espacios
         # ("Projecto Navegador"); os.execv en Windows no lo hace.
         sys.exit(subprocess.call(
@@ -47,6 +47,7 @@ def main():
     historial = Historial()
     favoritos = Favoritos()
     descargas = Descargas()
+    # Carga síncrona con caché: 0,43 s en segundo arranque, ~1 s en el primero.
     gestor = GestorBloqueo()
 
     # Perfil normal con su interceptor de bloqueo.

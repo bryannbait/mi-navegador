@@ -116,6 +116,10 @@ El anti-fingerprinting reduce la entropía, no te vuelve anónimo:
   exportar un canvas WebGL con `toDataURL` no pasa por nuestro parche 2D.
 - **Plugins/PDF**: QtWebEngine no expone plugins y un Chrome real sí. No lo
   falsificamos (sería más sospechoso un PDF Viewer falso).
+- **`navigator.userAgentData`**: QtWebEngine no lo implementa, así que no hay
+  nada que parchear. La cabecera `Sec-CH-UA` sí se manda, y eso es una
+  incoherencia que un sitio puede notar (cabecera de Chrome, API ausente).
+  Queda como pendiente conocido: se podría crear el objeto desde JS.
 - **TLS/JA3 y tamaño de paquetes**: capas por debajo del navegador.
 - **Funciones nativas**: nuestros parches son JavaScript; una web muy
   avanzada podría notar que `navigator.getBattery.toString()` no dice
@@ -128,6 +132,26 @@ mucho menos única que antes, y el canvas ya no da el mismo hash.
 
 ## 5. Cómo comprobarlo
 
+### Sin salir del navegador
+
+1. **Menú del escudo → «Comprobar mi huella (página local)»** (o `:privacidad`).
+   Abre una página generada por el propio navegador, sin red, con la tabla de
+   todo lo que una web puede leer. Debe mostrar valores genéricos: 8 núcleos,
+   8 GB, `Win32`, idioma `es-MX`, GPC `true` y un hash de canvas distinto en
+   cada arranque.
+2. **`herramientas/servidor_cabeceras.py`**: servidor local que imprime y
+   muestra las cabeceras recibidas (`User-Agent`, `Accept-Language`, `Sec-GPC`,
+   `Sec-CH-UA`).
+
+```bat
+venv\Scripts\python.exe herramientas\servidor_cabeceras.py
+:: abrir http://127.0.0.1:8000/
+```
+
+Compara las dos cosas con el escudo activado y desactivado (hay que recargar).
+
+### Contra sitios reales
+
 Abre estas webs **con la protección activada** y recarga dos veces:
 
 - https://coveryourtracks.eff.org/ (EFF, cobertura y rastreo)
@@ -139,6 +163,8 @@ Abre estas webs **con la protección activada** y recarga dos veces:
 
 Prueba también a desactivar la casilla del escudo, recargar y comparar: los
 valores vuelven a los reales. Así ves el efecto de cada capa.
+
+El registro de estas pasadas se anota en `docs/PRUEBAS_MANUALES.md`.
 
 ## 6. Preguntas de estudio (Nivel 10)
 
@@ -156,9 +182,12 @@ valores vuelven a los reales. Así ves el efecto de cada capa.
 
 ## 7. Archivos que toca este nivel
 
-- `anti_fingerprint.py` → script JS + configuración de perfiles (nuevo)
-- `config.py` → opciones `FP_*`, `UA_PERSONALIZADO`, versión 1.3
-- `navegador.py` → `configurar_perfil()` delega aquí; casilla en el escudo
-- `ventana_incognito.py` → aplica la protección a su perfil propio
-- `bloqueador.py` → cabeceras `Sec-GPC` y `Sec-CH-UA`
-- `preferencias.py` → `anti_fingerprint` por defecto en `true`
+- `privacidad/anti_fingerprint.py` → script JS + configuración de perfiles
+- `config.py` → opciones `FP_*`, `UA_PERSONALIZADO`, versión
+- `navegador.py` → `configurar_perfil()` delega aquí; casilla y diagnóstico en el escudo
+- `interfaz/ventana_incognito.py` → aplica la protección a su perfil propio
+- `privacidad/bloqueador.py` → cabeceras `Sec-GPC` y `Sec-CH-UA`
+- `modelos/preferencias.py` → `anti_fingerprint` por defecto en `true`
+- `interfaz/pagina_privacidad.py` → página local de diagnóstico (nuevo)
+- `herramientas/servidor_cabeceras.py` → servidor local que muestra cabeceras (nuevo)
+- `pruebas/test_anti_fingerprint.py` → pruebas sin navegador (nuevo)
