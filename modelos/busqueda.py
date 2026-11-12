@@ -24,16 +24,15 @@ def nombre(clave):
 def elegir(motor_actual, caidos):
     """Clave del motor que se usará de verdad.
 
-    Si el elegido está caído se usa config.MOTOR_RESPALDO. Si tampoco hay
-    respaldo utilizable, se devuelve el original: es mejor intentarlo que
-    no buscar nada.
+    Si el elegido está caído se recorre config.MOTORES_RESPALDO en orden. Si
+    ninguno sirve se devuelve el original: es mejor intentarlo que no buscar.
     """
     if motor_actual not in caidos:
         return motor_actual
 
-    respaldo = config.MOTOR_RESPALDO
-    if respaldo and respaldo != motor_actual and respaldo not in caidos:
-        return respaldo
+    for respaldo in config.MOTORES_RESPALDO:
+        if respaldo != motor_actual and respaldo not in caidos:
+            return respaldo
     return motor_actual
 
 
@@ -70,3 +69,53 @@ def consulta_de(query):
         if valores.get(campo):
             return valores[campo][0]
     return ""
+
+
+# Rutas donde un motor pone su página de "demuestra que no eres un robot".
+PATRONES_RETO = {
+    "google": ("/sorry", "enablejs"),
+}
+
+
+def es_reto(host, ruta, catalogo=None):
+    """Clave del motor si esa URL es su página de verificación (CAPTCHA).
+
+    Google redirige a /sorry/index cuando desconfía del navegador. No es un
+    fallo de red: el dominio responde, pero no da resultados. Se aceptan los
+    subdominios del motor (www.google.com, consent.google.com...).
+    """
+    host = (host or "").lower()
+    ruta = (ruta or "").lower()
+    if not host:
+        return None
+
+    catalogo = catalogo or motores.MOTORES
+    for clave, patrones in PATRONES_RETO.items():
+        motor = catalogo.get(clave)
+        if not motor:
+            continue
+        base = host_de(motor["url_busqueda"])
+        if base.startswith("www."):
+            base = base[4:]
+        if host != base and not host.endswith("." + base):
+            continue
+        for patron in patrones:
+            if patron in ruta:
+                return clave
+    return None
+
+
+def consulta_de_reto(query):
+    """Consulta original escondida en el parámetro continue= del reto.
+
+    Google manda /sorry/index?continue=https://www.google.com/search?q=youtube
+    para poder devolverte a los resultados una vez resuelto el captcha.
+    """
+    valores = parse_qs((query or "").lstrip("?"))
+    for destino in valores.get("continue", []):
+        partes = destino.split("?", 1)
+        if len(partes) == 2:
+            consulta = consulta_de(partes[1])
+            if consulta:
+                return consulta
+    return consulta_de(query)

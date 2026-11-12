@@ -45,6 +45,25 @@ import config
 # ---------- VARIABLES GLOBALES ----------
 
 interceptor = None   # interceptor del perfil normal (lo crea configurar_perfil)
+_perfil_normal = None  # perfil persistente compartido por la ventana normal
+
+
+def perfil_persistente():
+    """Perfil compartido de la ventana normal, con cookies en disco.
+
+    El perfil por defecto de QtWebEngine es "off the record": no guarda
+    cookies ni caché, así que cada arranque parecía un navegador recién
+    instalado. Los buscadores (Google sobre todo) respondían con CAPTCHA en
+    cada búsqueda. Un perfil con nombre sí persiste, como en cualquier
+    navegador. El incógnito NO usa esto: tiene su propio perfil en memoria.
+    """
+    global _perfil_normal
+    if _perfil_normal is None:
+        _perfil_normal = QWebEngineProfile("MiNavegador")
+        _perfil_normal.setPersistentCookiesPolicy(
+            QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
+        )
+    return _perfil_normal
 
 
 def url_a_texto(qurl):
@@ -55,7 +74,7 @@ def url_a_texto(qurl):
 
 def configurar_perfil(gestor, anti_fingerprint_activo=None):
     global interceptor
-    perfil = QWebEngineProfile.defaultProfile()
+    perfil = perfil_persistente()
     anti_fingerprint.preparar_perfil(perfil, anti_fingerprint_activo)
     perfil.setHttpCacheMaximumSize(50 * 1024 * 1024)
     interceptor = Bloqueador(
@@ -142,7 +161,7 @@ class MiNavegador(QMainWindow):
         # Modo lectura: estado por vista (bool). No se persiste.
         self._lectura_por_view = {}
         perfil = (perfil_web if perfil_web is not None
-                  else QWebEngineProfile.defaultProfile())
+                  else perfil_persistente())
         perfil.downloadRequested.connect(self._descarga_solicitada)
 
         self.setWindowTitle(f"{config.NOMBRE} {config.VERSION}")
@@ -156,6 +175,9 @@ class MiNavegador(QMainWindow):
         # Claves de los motores que han fallado en esta sesión (no se persiste).
         self._motores_caidos = set()
         self._respaldo_hecho = set()
+        # Motores que pidieron CAPTCHA: no se usan hasta que pase la espera.
+        self._reto_hasta = {}
+        self._reto_visto = set()
         self._reply_motor = None
         self._motor_comprobado = 0.0
 
@@ -336,7 +358,16 @@ class MiNavegador(QMainWindow):
 
     def _motor_efectivo(self):
         """Clave del motor que se usará ahora mismo (respaldo si hace falta)."""
-        return busqueda.elegir(self.motor_actual, self._motores_caidos)
+        return busqueda.elegir(self.motor_actual, self._caidos_ahora())
+
+    def _caidos_ahora(self):
+        """Motores no utilizables: los caídos y los que están en espera por
+        haber pedido CAPTCHA (la espera se limpia sola al expirar)."""
+        ahora = time.monotonic()
+        for clave, hasta in list(self._reto_hasta.items()):
+            if hasta <= ahora:
+                del self._reto_hasta[clave]
+        return set(self._motores_caidos) | set(self._reto_hasta)
 
     def _usando_respaldo(self):
         return self._motor_efectivo() != self.motor_actual
@@ -615,6 +646,9 @@ class MiNavegador(QMainWindow):
         self.motor_actual = clave
         self.prefs.set("motor_busqueda", clave)
         self._actualizar_icono_motor()
+        # Elección explícita del usuario: se respeta aunque ese motor hubiera
+        # pedido CAPTCHA hace un momento (quizá quiera resolverlo).
+        self._reto_hasta.pop(clave, None)
         # Motor recién elegido: puede que ahora sí responda (o que no).
         self._motor_comprobado = 0.0
         self._comprobar_motor(clave)
@@ -718,10 +752,10 @@ class MiNavegador(QMainWindow):
             self._comprobar_motor()
 
         url, clave = busqueda.url_busqueda(
-            self.motor_actual, texto, self._motores_caidos)
+            self.motor_actual, texto, self._caidos_ahora())
         if clave != self.motor_actual:
             self.statusBar().showMessage(
-                f"{busqueda.nombre(self.motor_actual)} no responde: "
+                f"{busqueda.nombre(self.motor_actual)} no está disponible: "
                 f"buscando en {busqueda.nombre(clave)}...", 5000)
         view.setUrl(QUrl(url))
 
@@ -881,7 +915,7 @@ class MiNavegador(QMainWindow):
 
     def _perfil_actual(self):
         return (self.perfil_web if self.perfil_web is not None
-                else QWebEngineProfile.defaultProfile())
+                else perfil_persistente())
 
     def abrir_privacidad(self):
         """Abre la página local que muestra lo que una web ve de nosotros."""
@@ -1090,7 +1124,7 @@ class MiNavegador(QMainWindow):
         view = QWebEngineView()
 
         perfil = (self.perfil_web if self.perfil_web is not None
-                  else QWebEngineProfile.defaultProfile())
+                  else perfil_persistente())
 
         page = PaginaVim(perfil, view)
         page.busqueda_pedida.connect(self._buscar_desde_inicio)
@@ -1654,8 +1688,63 @@ class MiNavegador(QMainWindow):
                 self.historial.añadir(view.title(), url_a_texto(view.url()))
                 self._zoom_aplicar_vista(view)
 
-        if not ok:
+        # Primero el CAPTCHA: la página de verificación suele llegar con un
+        # código HTTP de error (429), así que "no cargó" y "es un reto" pueden
+        # ser el mismo evento. Detectarlo antes evita el mensaje equivocado.
+        if not self._revisar_reto(self.sender()) and not ok:
             self._reintentar_con_respaldo(self.sender())
+
+    def _revisar_reto(self, view):
+        """Detecta la página de CAPTCHA de un motor y busca en el siguiente.
+
+        Google responde /sorry/index a QtWebEngine: el dominio funciona pero no
+        da resultados. En vez de dejarte atrapado en el reto, repetimos tu
+        búsqueda en el motor siguiente (y no volvemos a molestar a ese motor
+        durante un rato). Devuelve True si era un reto y ya se actuó.
+        """
+        try:
+            return self._revisar_reto_seguro(view)
+        except Exception:
+            return False
+
+    def _revisar_reto_seguro(self, view):
+        if not isinstance(view, QWebEngineView):
+            return False
+        qurl = view.url()
+        clave = busqueda.es_reto(qurl.host(), qurl.path())
+        if clave is None:
+            return False
+
+        marca = (id(view), qurl.toString())
+        if marca in self._reto_visto:
+            return True
+        self._reto_visto.add(marca)
+
+        self._reto_hasta[clave] = time.monotonic() + config.MOTOR_ESPERA_MINUTOS * 60
+        self._actualizar_icono_motor()
+
+        consulta = busqueda.consulta_de_reto(qurl.query())
+        destino = busqueda.elegir(clave, self._caidos_ahora())
+        if destino == clave:
+            self.statusBar().showMessage(
+                f"{busqueda.nombre(clave)} pide una verificación (CAPTCHA).",
+                8000)
+            return True
+
+        url = None
+        if consulta:
+            url, _ = busqueda.url_busqueda(destino, consulta)
+        if not url:
+            url = motores.obtener(destino).get("url_home")
+        if not url:
+            return True
+
+        self.statusBar().showMessage(
+            f"{busqueda.nombre(clave)} pide CAPTCHA: buscando en "
+            f"{busqueda.nombre(destino)}.", 8000)
+        print(f"[Búsqueda] {busqueda.nombre(clave)} pide CAPTCHA; "
+              f"buscando en {busqueda.nombre(destino)}.", flush=True)
+        QTimer.singleShot(0, lambda: view.setUrl(QUrl(url)))
 
     def _reintentar_con_respaldo(self, view):
         """Si falló la carga de una URL del motor de búsqueda, reintenta la
@@ -1687,7 +1776,12 @@ class MiNavegador(QMainWindow):
         # Ojo: no basta con mirar self._motores_caidos. Puede que la sonda ya
         # haya marcado el motor como caído mientras esta pestaña cargaba; en
         # ese caso también hay que reintentar.
-        caidos = set(self._motores_caidos) | {clave}
+        # Si el motor está en espera por CAPTCHA, el reto ya se atendió:
+        # repetir el aviso de "no responde" solo confunde.
+        if clave in self._reto_hasta:
+            return
+
+        caidos = self._caidos_ahora() | {clave}
         destino = busqueda.elegir(clave, caidos)
         if destino == clave:
             return
@@ -1695,7 +1789,7 @@ class MiNavegador(QMainWindow):
         self._respaldo_hecho.add(marca)
         self._motores_caidos.add(clave)
 
-        consulta = busqueda.consulta_de(qurl.query())
+        consulta = busqueda.consulta_de_reto(qurl.query())
         motor = motores.obtener(destino)
         if consulta:
             url, _ = busqueda.url_busqueda(destino, consulta)

@@ -254,3 +254,23 @@ Brave Browser, así que no es el navegador). Orden: 1.º Brave Search,
 | Aviso en la barra de estado | Indica que el motor no responde y cuál se usa | ✔ |
 | Preferencia del motor | No se modifica: sigue siendo la elegida | ✔ |
 | Sonda de disponibilidad | No bloquea la interfaz ni cierra la app | ✔ |
+
+## Búsqueda: CAPTCHA y perfil persistente (12/11/2026)
+
+El perfil de la ventana normal pasó de ser "off the record" (sin cookies) a un
+perfil con nombre (`MiNavegador`) con cookies en disco, como cualquier
+navegador. El incógnito sigue sin guardar nada. Además, si un motor contesta
+con su página de verificación (`/sorry/index` en Google), se repite la búsqueda
+en el siguiente motor y ese queda en espera 20 minutos.
+
+Orden de motores: 1.º Brave Search, 2.º Google, 3.º DuckDuckGo (red de
+seguridad).
+
+| Escenario | Resultado observado | ✔ |
+|---|---|---|
+| Búsqueda normal en Google (perfil persistente) | Resultados reales, sin CAPTCHA | ✔ |
+| Segunda búsqueda seguida | Sin CAPTCHA (las cookies se conservan) | ✔ |
+| Abrir a mano una URL `/sorry/index` de Google | Salta solo a DuckDuckGo con la misma consulta | ✔ |
+| Aviso en la barra de estado | "Google pide CAPTCHA: buscando en DuckDuckGo" | ✔ |
+| Motor en espera | No se vuelve a usar hasta 20 minutos después | ✔ |
+| Ventana incógnito | Perfil en memoria; no escribe cookies ni sesión | ✔ |

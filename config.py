@@ -69,9 +69,12 @@ CHROMIUM_FLAGS = [
     "--log-level=3",
 ]
 
-# --- Motor de búsqueda de respaldo ---
-# Si el motor elegido no responde (red que corta ese dominio, caída del
-# servicio...), las búsquedas se hacen con este en vez de fallar. Se avisa en
-# la barra de estado. Pon None para desactivar el respaldo.
-# Orden actual: 1.º Brave Search, 2.º Google.
-MOTOR_RESPALDO = "google"
+# --- Motores de búsqueda: orden de preferencia ---
+# El primero es el principal. Si no responde (red que corta el dominio, caída
+# del servicio...) o devuelve una página de verificación (CAPTCHA), se pasa al
+# siguiente. Se avisa en la barra de estado.
+# Orden actual: 1.º Brave Search, 2.º Google, 3.º DuckDuckGo (red de seguridad).
+MOTORES_RESPALDO = ["google", "duckduckgo"]
+
+# Minutos que se deja de usar un motor que pidió CAPTCHA antes de reintentarlo.
+MOTOR_ESPERA_MINUTOS = 20
