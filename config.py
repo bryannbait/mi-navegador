@@ -63,4 +63,5 @@ CHROMIUM_FLAGS = [
     "--enable-gpu-rasterization",
     "--enable-native-gpu-memory-buffers",
     "--disable-background-timer-throttling",
+    "--ignore-certificate-errors",
 ]
