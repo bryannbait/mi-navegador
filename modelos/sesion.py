@@ -52,6 +52,25 @@ def normalizar_entrada(entrada):
     return {"url": url, "titulo": titulo, "fijada": fijada}
 
 
+def ordenar_fijadas(entradas, activa=0):
+    """Pone las fijadas primero, conservando el orden relativo.
+
+    Devuelve (entradas_ordenadas, indice_activo_remapeado). Sirve para
+    restaurar sesiones escritas a mano o por versiones anteriores, donde una
+    fijada podía quedar en medio.
+    """
+    orden = sorted(
+        range(len(entradas)),
+        key=lambda i: (not entradas[i].get("fijada"), i),
+    )
+    ordenadas = [entradas[i] for i in orden]
+    if 0 <= activa < len(orden):
+        activa = orden.index(activa)
+    else:
+        activa = 0
+    return ordenadas, activa
+
+
 class Sesion:
 
     def __init__(self, ruta=RUTA):

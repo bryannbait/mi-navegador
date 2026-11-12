@@ -7,7 +7,7 @@ import os
 import tempfile
 import unittest
 
-from modelos.sesion import MAX_PESTANAS, Sesion, normalizar_entrada
+from modelos.sesion import MAX_PESTANAS, Sesion, normalizar_entrada, ordenar_fijadas
 
 
 class NormalizarTest(unittest.TestCase):
@@ -44,6 +44,47 @@ class NormalizarTest(unittest.TestCase):
             {"url": "https://a.test", "fijada": True})["fijada"])
         self.assertFalse(normalizar_entrada(
             {"url": "https://a.test", "fijada": "si"})["fijada"])
+
+
+class OrdenFijadasTest(unittest.TestCase):
+
+    def test_sin_fijadas_no_cambia_nada(self):
+        entradas = [{"url": "a"}, {"url": "b"}, {"url": "c"}]
+        ordenadas, activa = ordenar_fijadas(entradas, 2)
+        self.assertEqual(ordenadas, entradas)
+        self.assertEqual(activa, 2)
+
+    def test_fijadas_van_primero_conservando_orden(self):
+        entradas = [
+            {"url": "a"},
+            {"url": "b", "fijada": True},
+            {"url": "c"},
+            {"url": "d", "fijada": True},
+        ]
+        ordenadas, _ = ordenar_fijadas(entradas, 0)
+        self.assertEqual([e["url"] for e in ordenadas], ["b", "d", "a", "c"])
+
+    def test_el_indice_activo_sigue_a_su_pestana(self):
+        entradas = [
+            {"url": "a"},
+            {"url": "b"},
+            {"url": "c", "fijada": True},
+        ]
+        # La activa era "a" (índice 0); tras mover "c" al principio pasa a 1.
+        ordenadas, activa = ordenar_fijadas(entradas, 0)
+        self.assertEqual([e["url"] for e in ordenadas], ["c", "a", "b"])
+        self.assertEqual(activa, 1)
+
+        _, activa = ordenar_fijadas(entradas, 2)
+        self.assertEqual(activa, 0)
+
+    def test_indice_fuera_de_rango(self):
+        entradas = [{"url": "a", "fijada": True}]
+        self.assertEqual(ordenar_fijadas(entradas, 9), (entradas, 0))
+        self.assertEqual(ordenar_fijadas(entradas, -1), (entradas, 0))
+
+    def test_lista_vacia(self):
+        self.assertEqual(ordenar_fijadas([], 0), ([], 0))
 
 
 class SesionTest(unittest.TestCase):

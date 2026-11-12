@@ -26,7 +26,7 @@ class AtajosTest(unittest.TestCase):
         obligatorios = [
             "Ctrl+L", "Ctrl+T", "Ctrl+W", "Ctrl+Tab", "Ctrl+Shift+Tab",
             "Ctrl+Shift+T", "Ctrl+F", "Ctrl+J", "Ctrl+H", "Ctrl+D",
-            "Ctrl+Shift+N", "Ctrl+Shift+W", "F5", "F11", "Esc",
+            "Ctrl+Shift+P", "Ctrl+Shift+N", "Ctrl+Shift+W", "F5", "F11", "Esc",
             "Alt+Left", "Alt+Right", "Alt+Home",
         ]
         for secuencia in obligatorios:

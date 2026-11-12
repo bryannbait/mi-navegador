@@ -114,3 +114,35 @@ Notas de la última pasada:
 
 -
 
+## Nivel 11 — Pestañas fijadas
+
+### Comprobación automática
+
+Ejecutada el 12/11/2026 en ventanas reales:
+
+| Escenario | Resultado observado | ✔ |
+|---|---|---|
+| Fijar una pestaña | Se mueve al principio y muestra el icono de pin | ✔ |
+| Fijar una segunda | Se coloca al final del bloque de fijadas (orden entre ellas estable) | ✔ |
+| Desfijar | Sale del bloque y queda justo detrás de las fijadas; vuelve su favicon | ✔ |
+| `Ctrl+Shift+P` | Alterna el estado de la pestaña actual (acción registrada y disparada) | ✔ |
+| Cerrar y reabrir (`Ctrl+Shift+T`) | La pestaña vuelve con su estado de fijada | ✔ |
+| Datos por pestaña al arrastrar | `setTabData` viaja con la pestaña: mover una fijada a la derecha conserva su estado | ✔ |
+| Guardar y restaurar | `sesion.json` guarda `fijada` y la restauración pone las fijadas primero, remapeando el índice activo | ✔ |
+
+### Checklist manual
+
+Fecha: ____ / ____ / ______
+
+| # | Comprobación | Cómo | Resultado esperado | ✔ |
+|---|---|---|---|---|
+| 1 | Menú contextual | Clic derecho en una pestaña | «Fijar pestaña», «Cerrar pestaña», «Reabrir pestaña cerrada» | ☐ |
+| 2 | Icono visible | Fijar una pestaña con favicon | Se ve el pin a la izquierda; al desfijar vuelve el favicon | ☐ |
+| 3 | Arrastrar | Arrastrar una fijada entre las demás fijadas | Se reordena sin perder el pin | ☐ |
+| 4 | Persistencia | Fijar dos, cerrar y abrir | Las dos aparecen a la izquierda y con pin | ☐ |
+| 5 | Cerrar una fijada | Cerrarla y pulsar `Ctrl+Shift+T` | Vuelve fijada a la izquierda | ☐ |
+
+Notas de la última pasada:
+
+-
+

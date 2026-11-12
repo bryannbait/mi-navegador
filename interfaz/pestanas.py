@@ -111,6 +111,15 @@ class Pestanas(QObject):
     def tabIcon(self, idx):
         return self.barra.tabIcon(idx)
 
+    def setTabData(self, idx, datos):
+        self.barra.setTabData(idx, datos)
+
+    def tabData(self, idx):
+        return self.barra.tabData(idx)
+
+    def moveTab(self, desde, hasta):
+        self.barra.moveTab(desde, hasta)
+
     # ---------- internos ----------
 
     def _on_current_changed(self, idx):

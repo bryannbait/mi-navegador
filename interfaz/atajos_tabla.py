@@ -17,6 +17,7 @@ ATAJOS_GLOBALES = [
     ("Ctrl+T", "nueva_pestana"),
     ("Ctrl+W", "cerrar_pestana_actual"),
     ("Ctrl+Shift+T", "reabrir_pestana_cerrada"),
+    ("Ctrl+Shift+P", "alternar_fijada"),
     ("Ctrl+Tab", "siguiente_pestana"),
     ("Ctrl+Shift+Tab", "pestana_anterior"),
     ("Ctrl+PgDown", "siguiente_pestana"),

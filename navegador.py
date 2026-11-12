@@ -32,7 +32,7 @@ from interfaz import pagina_inicio
 from interfaz import pagina_privacidad
 from assets.icons.helpers import icono
 from modelos import motores
-from modelos.sesion import Sesion
+from modelos.sesion import Sesion, ordenar_fijadas
 import config
 
 
@@ -156,6 +156,10 @@ class MiNavegador(QMainWindow):
         self.tabs.barra.setIconSize(QSize(16, 16))
         self.tabs.tabCloseRequested.connect(self.cerrar_pestana)
         self.tabs.currentChanged.connect(self.cambio_de_pestana)
+        self.tabs.barra.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabs.barra.customContextMenuRequested.connect(
+            self._menu_contexto_pestana)
 
         self.btn_nueva = self._boton_icono("plus", "Nueva pestaña (Ctrl+T)",
                                            lambda: self.nueva_pestana())
@@ -334,8 +338,17 @@ class MiNavegador(QMainWindow):
     def _on_icon_changed(self, ic):
         view = self.sender()
         idx = self.tabs.indexOf(view)
-        if idx != -1:
-            self.tabs.setTabIcon(idx, ic if not ic.isNull() else self._icono_pestana(view))
+        if idx == -1:
+            return
+        nuevo = ic if not ic.isNull() else self._icono_pestana(view)
+        if self.es_fijada(idx):
+            # La pestaña fijada muestra el pin; el favicon se guarda para
+            # devolverlo si se desfija.
+            datos = dict(self.tabs.tabData(idx) or {})
+            datos["icono"] = nuevo
+            self.tabs.setTabData(idx, datos)
+            return
+        self.tabs.setTabIcon(idx, nuevo)
 
     def _icono_pestana(self, view):
         return icono("home" if self._es_url_vacia(view.url()) else "globe",
@@ -934,7 +947,7 @@ class MiNavegador(QMainWindow):
         widget = self.tabs.widget(idx)
         es_vista = isinstance(widget, QWebEngineView)
         if es_vista:
-            self._anotar_cerrada(widget.url())
+            self._anotar_cerrada(widget.url(), self.es_fijada(idx))
             if self.interceptor_actual is not None:
                 self.interceptor_actual.olvidar_pestana(id(widget))
         if widget is not None:
@@ -945,21 +958,24 @@ class MiNavegador(QMainWindow):
         if self.tabs.count() == 0:
             self.close()
 
-    def _anotar_cerrada(self, qurl):
+    def _anotar_cerrada(self, qurl, fijada=False):
         """Guarda la URL para poder reabrirla con Ctrl+Shift+T.
 
         Las páginas internas (inicio, about:) no se reabren: no hay nada que
-        restaurar.
+        restaurar. Se recuerda también si estaba fijada.
         """
         if self._es_url_vacia(qurl) or qurl.scheme() not in ("http", "https", "file"):
             return
-        self._cerradas.append(url_a_texto(qurl))
+        self._cerradas.append((url_a_texto(qurl), bool(fijada)))
         del self._cerradas[:-10]     # como mucho las 10 últimas
 
     def reabrir_pestana_cerrada(self):
         if not self._cerradas:
             return
-        self.nueva_pestana(self._cerradas.pop())
+        url, fijada = self._cerradas.pop()
+        view = self.nueva_pestana(url)
+        if fijada:
+            self._aplicar_fijada(self.tabs.indexOf(view), True)
 
     def ir_a_pestana(self, idx):
         """Ctrl+1..8 → esa pestaña; Ctrl+9 → la última (idx -1)."""
@@ -970,6 +986,80 @@ class MiNavegador(QMainWindow):
             idx = total - 1
         if 0 <= idx < total:
             self.tabs.setCurrentIndex(idx)
+
+    # ---------- PESTAÑAS FIJADAS ----------
+
+    def es_fijada(self, idx):
+        datos = self.tabs.tabData(idx)
+        return bool(datos and datos.get("fijada"))
+
+    def alternar_fijada(self, idx=None):
+        """Ctrl+Shift+P: fija o desfija la pestaña actual (o la indicada)."""
+        if idx is None:
+            idx = self.tabs.currentIndex()
+        if idx < 0:
+            return
+        self._aplicar_fijada(idx, not self.es_fijada(idx))
+
+    def _aplicar_fijada(self, idx, fijada):
+        if not 0 <= idx < self.tabs.count():
+            return
+        datos = dict(self.tabs.tabData(idx) or {})
+        datos["fijada"] = bool(fijada)
+        self.tabs.setTabData(idx, datos)
+
+        vista = self.tabs.widget(idx)
+        if fijada:
+            # Guardamos el favicon para devolverlo al desfijar; el icono de
+            # la pestaña pasa a ser el pin.
+            favicon = (vista.icon()
+                       if isinstance(vista, QWebEngineView) else None)
+            if favicon is not None and not favicon.isNull():
+                datos["icono"] = favicon
+                self.tabs.setTabData(idx, datos)
+            self.tabs.setTabIcon(idx, self._icono_pin())
+        else:
+            favorito = datos.pop("icono", None)
+            self.tabs.setTabData(idx, datos)
+            if favorito is not None and not favorito.isNull():
+                self.tabs.setTabIcon(idx, favorito)
+            elif isinstance(vista, QWebEngineView):
+                self.tabs.setTabIcon(idx, self._icono_pestana(vista))
+            else:
+                self.tabs.setTabIcon(
+                    idx, icono("home", config.COLOR_TEXTO_SUAVE, 16))
+
+        # Las fijadas van siempre a la izquierda. El destino es el final del
+        # bloque de fijadas (sin contarse a sí misma).
+        destino = sum(
+            1 for i in range(self.tabs.count())
+            if i != idx and self.es_fijada(i)
+        )
+        if destino != idx:
+            actual = self.tabs.currentWidget()
+            self.tabs.moveTab(idx, destino)
+            if actual is not None:
+                self.tabs.setCurrentWidget(actual)
+
+    def _icono_pin(self):
+        return icono("pin", config.COLOR_ACENTO_SUAVE, 16)
+
+    def _menu_contexto_pestana(self, pos):
+        idx = self.tabs.barra.tabAt(pos)
+        if idx < 0:
+            return
+        menu = QMenu(self)
+        acc = menu.addAction(
+            "Desfijar pestaña" if self.es_fijada(idx) else "Fijar pestaña"
+        )
+        acc.triggered.connect(lambda: self.alternar_fijada(idx))
+        acc = menu.addAction("Cerrar pestaña")
+        acc.triggered.connect(lambda: self.cerrar_pestana(idx))
+        menu.addSeparator()
+        acc = menu.addAction("Reabrir pestaña cerrada")
+        acc.setEnabled(bool(self._cerradas))
+        acc.triggered.connect(self.reabrir_pestana_cerrada)
+        menu.exec(self.tabs.barra.mapToGlobal(pos))
 
     def cerrar_ventana(self):
         self.close()
@@ -995,16 +1085,19 @@ class MiNavegador(QMainWindow):
             if diferida is not None:
                 # Pestaña restaurada que aún no se ha abierto: se guarda tal
                 # cual estaba, sin crear la vista.
-                pestanas.append(dict(diferida))
+                entrada = dict(diferida)
+                entrada["fijada"] = self.es_fijada(i)
+                pestanas.append(entrada)
             elif (not isinstance(view, QWebEngineView)
                     or self._es_url_vacia(view.url())
                     or view.url().scheme() not in ("http", "https")):
                 # La página de inicio propia no se restaura: se abre nueva.
-                pestanas.append({"nueva": True})
+                pestanas.append({"nueva": True, "fijada": self.es_fijada(i)})
             else:
                 pestanas.append({
                     "url": url_a_texto(view.url()),
                     "titulo": view.title(),
+                    "fijada": self.es_fijada(i),
                 })
             if i == actual:
                 activa = len(pestanas) - 1
@@ -1025,7 +1118,7 @@ class MiNavegador(QMainWindow):
             self.nueva_pestana()
             return
 
-        activa = self.sesion.activa()
+        entradas, activa = ordenar_fijadas(entradas, self.sesion.activa())
         self._restaurando = True
         try:
             for i, entrada in enumerate(entradas):
@@ -1033,11 +1126,13 @@ class MiNavegador(QMainWindow):
                     view = self._crear_vista()
                     self.tabs.addTab(view, "Nueva pestaña")
                     self._cargar_entrada(view, entrada)
+                    self._aplicar_fijada_silenciosa(i, entrada)
                 else:
                     marcador = QWidget()
                     self.tabs.addTab(marcador, self._titulo_entrada(entrada))
                     self.tabs.setTabIcon(
                         i, icono("home", config.COLOR_TEXTO_SUAVE, 16))
+                    self._aplicar_fijada_silenciosa(i, entrada)
                     self._diferidas[id(marcador)] = entrada
         finally:
             self._restaurando = False
@@ -1045,9 +1140,16 @@ class MiNavegador(QMainWindow):
         if self.tabs.count() == 0:
             self.nueva_pestana()
             return
-        idx = self.sesion.activa()
+        idx = activa
         if 0 <= idx < self.tabs.count():
             self.tabs.setCurrentIndex(idx)
+
+    def _aplicar_fijada_silenciosa(self, idx, entrada):
+        """Marca la pestaña como fijada sin reordenar (ya viene ordenada)."""
+        if not entrada.get("fijada"):
+            return
+        self.tabs.setTabData(idx, {"fijada": True})
+        self.tabs.setTabIcon(idx, self._icono_pin())
 
     @staticmethod
     def _titulo_entrada(entrada):
@@ -1075,6 +1177,7 @@ class MiNavegador(QMainWindow):
         view = self._crear_vista()
         self.tabs.reemplazar_pagina(idx, view)
         self._cargar_entrada(view, entrada)
+        self._aplicar_fijada_silenciosa(idx, entrada)
 
     # ---------- BUSCAR EN LA PÁGINA ----------
 

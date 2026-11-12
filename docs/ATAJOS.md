@@ -15,6 +15,7 @@ Funcionan en cualquier pestaña, también con el foco dentro de la página.
 | `Ctrl+T` | Nueva pestaña |
 | `Ctrl+W` | Cerrar pestaña |
 | `Ctrl+Shift+T` | Reabrir la última pestaña cerrada (hasta 10) |
+| `Ctrl+Shift+P` | Fijar o desfijar la pestaña actual |
 | `Ctrl+Tab` / `Ctrl+PgDown` | Pestaña siguiente |
 | `Ctrl+Shift+Tab` / `Ctrl+PgUp` | Pestaña anterior |
 | `Ctrl+1` … `Ctrl+8` | Ir a la pestaña 1–8 |
@@ -86,7 +87,6 @@ Estos atajos se añadirán en sus fases y aparecerán en la tabla al implementar
 
 | Atajo | Fase | Acción |
 |---|---|---|
-| `Ctrl+Shift+P` | B2 | Fijar o desfijar la pestaña |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | B3 | Zoom: acercar / alejar / restablecer |
 | `Ctrl+Alt+R` | B4 | Modo lectura |
 
