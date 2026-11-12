@@ -36,13 +36,6 @@ from navegador import MiNavegador, configurar_perfil
 from estilos import aplicar_tema
 import config
 
-# --- Flags de Chromium para aceleración de hardware y rendimiento ---
-# Se deben definir ANTES de crear QApplication para que QtWebEngine los lea.
-os.environ.setdefault(
-    "QTWEBENGINE_CHROMIUM_FLAGS",
-    " ".join(config.CHROMIUM_FLAGS),
-)
-
 
 def main():
     app = QApplication(sys.argv)
@@ -54,6 +47,7 @@ def main():
     historial = Historial()
     favoritos = Favoritos()
     descargas = Descargas()
+    # Carga síncrona con caché: 0,43 s en segundo arranque, ~1 s en el primero.
     gestor = GestorBloqueo()
 
     # Perfil normal con su interceptor de bloqueo.
