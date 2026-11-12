@@ -11,9 +11,11 @@ except ImportError:
     adblock = None
 
 
-DIR = os.path.dirname(__file__)
-CARPETA_LISTAS = os.path.join(DIR, "listas")
-RUTA_WHITELIST = os.path.join(DIR, "datos", "whitelist.json")
+from rutas import RUTA_DATOS, RUTA_LISTAS
+
+
+CARPETA_LISTAS = RUTA_LISTAS
+RUTA_WHITELIST = os.path.join(RUTA_DATOS, "whitelist.json")
 
 
 def _log(mensaje):

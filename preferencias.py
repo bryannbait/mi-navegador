@@ -4,8 +4,10 @@
 import json
 import os
 
+from rutas import RUTA_DATOS
 
-RUTA = os.path.join(os.path.dirname(__file__), "datos", "preferencias.json")
+
+RUTA = os.path.join(RUTA_DATOS, "preferencias.json")
 
 
 class Preferencias:
