@@ -7,7 +7,7 @@ from datetime import datetime
 from modelo_json import ModeloJSON
 
 
-RUTA = os.path.join(os.path.dirname(__file__), "historial.json")
+RUTA = os.path.join(os.path.dirname(__file__), "datos", "historial.json")
 MAX_ENTRADAS = 500  # tope para no llenar el disco
 
 

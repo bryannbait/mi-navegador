@@ -3,12 +3,26 @@
 
 import os
 import json
-import adblock  # <-- ahora usamos 'adblock', no 'braveblock'
+
+try:
+    import adblock  # motor Rust de Brave
+except ImportError:
+    # La app sigue arrancando (solo sin bloqueo) y avisa en cargar_listas().
+    adblock = None
 
 
 DIR = os.path.dirname(__file__)
 CARPETA_LISTAS = os.path.join(DIR, "listas")
-RUTA_WHITELIST = os.path.join(DIR, "whitelist.json")
+RUTA_WHITELIST = os.path.join(DIR, "datos", "whitelist.json")
+
+
+def _log(mensaje):
+    """print tolerante: no rompe si stdout no existe (pythonw) ni admite
+    el texto (consola cp1252 al redirigir la salida a un archivo)."""
+    try:
+        print(mensaje)
+    except (UnicodeEncodeError, OSError, AttributeError):
+        pass
 
 
 class GestorBloqueo:
@@ -34,6 +48,9 @@ class GestorBloqueo:
 
     def _guardar_whitelist(self):
         try:
+            carpeta = os.path.dirname(RUTA_WHITELIST)
+            if carpeta:
+                os.makedirs(carpeta, exist_ok=True)
             with open(RUTA_WHITELIST, "w", encoding="utf-8") as f:
                 json.dump(sorted(self.whitelist), f, indent=2)
         except OSError:
@@ -43,8 +60,14 @@ class GestorBloqueo:
 
     def cargar_listas(self):
         """Carga todas las reglas de la carpeta 'listas/' en el motor."""
+        if adblock is None:
+            _log("Falta la dependencia 'adblock'. Instálala con:")
+            _log(r"  venv\Scripts\pip install -r requirements.txt")
+            self.engine = None
+            return
+
         if not os.path.isdir(CARPETA_LISTAS):
-            print("⚠️ No existe la carpeta 'listas/'. Sin reglas cargadas.")
+            _log("No existe la carpeta 'listas/'. Sin reglas cargadas.")
             self.engine = None
             return
 
@@ -66,14 +89,14 @@ class GestorBloqueo:
                 pass
 
         if total_reglas == 0:
-            print("⚠️ No se encontraron reglas en 'listas/'.")
+            _log("No se encontraron reglas en 'listas/'.")
             self.engine = None
             return
 
         # 3. Crear el Engine a partir del FilterSet.
         #    El segundo argumento (True) activa las optimizaciones.
         self.engine = adblock.Engine(filter_set, True)
-        print(f"✅ Motor adblock cargado con ~{total_reglas} líneas de reglas")
+        _log("Motor adblock cargado con ~%d líneas de reglas" % total_reglas)
 
     # ---------- COMPROBACIÓN ----------
 

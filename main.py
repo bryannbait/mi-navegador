@@ -32,7 +32,8 @@ from historial import Historial
 from favoritos import Favoritos
 from descargas import Descargas
 from preferencias import Preferencias
-from navegador import MiNavegador, configurar_perfil, aplicar_tema
+from navegador import MiNavegador, configurar_perfil
+from estilos import aplicar_tema
 import config
 
 

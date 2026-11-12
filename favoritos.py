@@ -7,7 +7,7 @@ from datetime import datetime
 from modelo_json import ModeloJSON
 
 
-RUTA = os.path.join(os.path.dirname(__file__), "favoritos.json")
+RUTA = os.path.join(os.path.dirname(__file__), "datos", "favoritos.json")
 
 
 class Favoritos(ModeloJSON):

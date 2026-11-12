@@ -38,6 +38,9 @@ class ModeloJSON:
         if self.ruta is None:
             return
         try:
+            carpeta = os.path.dirname(self.ruta)
+            if carpeta:
+                os.makedirs(carpeta, exist_ok=True)
             with open(self.ruta, "w", encoding="utf-8") as f:
                 json.dump(self.entradas, f, ensure_ascii=False, indent=2)
         except OSError as e:
