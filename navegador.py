@@ -444,6 +444,7 @@ class MiNavegador(QMainWindow):
         - Posible HSTS/HPKP cacheado
 
         La vista se destruye sola al terminar (deleteLater).
+        NOTA: Actualmente no se usa (desactivada por causar efectos laterales).
         """
         motor = motores.obtener(clave)
         url_home = motor.get("url_home")
@@ -477,21 +478,6 @@ class MiNavegador(QMainWindow):
         setattr(self, f"_precarga_{clave}", view)
         view.loadFinished.connect(_fin)
         view.setUrl(QUrl(url_home))
-
-        if clave not in self._motores_caidos:
-            self._motores_caidos.add(clave)
-            if clave == self.motor_actual:
-                self._actualizar_icono_motor()
-                self.statusBar().showMessage(
-                    f"{busqueda.nombre(clave)} no responde en tu red. "
-                    f"Las búsquedas usarán {busqueda.nombre(self._motor_efectivo())}.",
-                    8000)
-                self._refrescar_inicios()
-                # Aviso legible en la consola: los errores de red de Chromium
-                # quedan silenciados (ver config.CHROMIUM_FLAGS).
-                print(f"[Búsqueda] {busqueda.nombre(clave)} no responde en tu "
-                      f"red; las búsquedas usarán "
-                      f"{busqueda.nombre(self._motor_efectivo())}.", flush=True)
 
     @staticmethod
     def _motor_responde(reply):
