@@ -53,6 +53,28 @@ def url_a_texto(qurl):
 
 def configurar_perfil(gestor, anti_fingerprint_activo=None):
     global interceptor
+
+    # --- SSL: asegurar que QtWebEngine use los certificados del sistema Windows ---
+
+    ssl_ok = QSslSocket.supportsSsl()
+    ca_certs = QSslSocket.defaultCaCertificates()
+
+    print(f"[SSL] soporte SSL: {ssl_ok}")
+    print(f"[SSL] certificados CA del sistema: {len(ca_certs)}")
+    print(f"[SSL] librería compilada: {QSslSocket.sslLibraryBuildVersionString()}")
+    print(f"[SSL] librería en ejecución: {QSslSocket.sslLibraryVersionString()}")
+
+    if not ssl_ok:
+        print("[SSL] ADVERTENCIA: Qt no tiene soporte SSL. Faltan DLLs de OpenSSL en el entorno.")
+        print("[SSL] Solución: instalar pyopenssl o copiar libssl/libcrypto al venv.")
+
+    # Configurar la configuración SSL por defecto con certificados del sistema
+    ssl_config = QSslConfiguration.defaultConfiguration()
+    ssl_config.setPeerVerifyMode(QSslSocket.PeerVerifyMode.VerifyPeer)
+    if ca_certs:
+        ssl_config.setCaCertificates(ca_certs)
+    QSslConfiguration.setDefaultConfiguration(ssl_config)
+
     perfil = QWebEngineProfile.defaultProfile()
     anti_fingerprint.preparar_perfil(perfil, anti_fingerprint_activo)
     perfil.setHttpCacheMaximumSize(50 * 1024 * 1024)
@@ -76,11 +98,6 @@ def configurar_perfil(gestor, anti_fingerprint_activo=None):
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
-
-    # --- SSL: ignorar certificados no válidos (evita SSL handshake failed en Windows) ---
-    QSslConfiguration.defaultConfiguration().setPeerVerifyMode(
-        QSslSocket.PeerVerifyMode.VerifyNone
-    )
 
     return perfil
 
