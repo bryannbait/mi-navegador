@@ -58,11 +58,18 @@ UA_PERSONALIZADO = (
 
 # --- Rendimiento: Chromium / QtWebEngine ---
 # Flags que se aplican al motor antes de crear la ventana.
-# Ayudan a la reproducción de vídeo y al renderizado de páginas pesadas.
+# Medidos en este equipo: --disable-extensions da ~30 % menos en MiNavegador()
+# y --disable-background-networking ~46 % menos en show().
+# Ver pruebas/bench_flags.py para la metodología.
 CHROMIUM_FLAGS = [
     "--enable-gpu-rasterization",
     "--enable-native-gpu-memory-buffers",
     "--disable-background-timer-throttling",
+    "--disable-extensions",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-default-apps",
+    "--disable-background-networking",
+    "--renderer-process-limit=2",
     # Solo errores fatales en la consola. Los fallos de red esperados (por
     # ejemplo un motor de búsqueda bloqueado por la red) ya se explican con
     # nuestro propio mensaje; el ruido de Chromium solo asusta.
