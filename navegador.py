@@ -36,7 +36,6 @@ import config
 
 # ---------- VARIABLES GLOBALES ----------
 
-interceptor = None   # interceptor del perfil normal (lo crea configurar_perfil)
 _perfil_normal = None  # perfil persistente compartido por la ventana normal
 
 
@@ -65,7 +64,10 @@ def url_a_texto(qurl):
 
 
 def configurar_perfil(gestor, anti_fingerprint_activo=None):
-    global interceptor
+    """Configura el perfil normal y devuelve (perfil, interceptor).
+
+    Cada llamada crea su propio Bloqueador; no hay estado global compartido.
+    """
     perfil = perfil_persistente()
     anti_fingerprint.preparar_perfil(perfil, anti_fingerprint_activo)
     perfil.setHttpCacheMaximumSize(50 * 1024 * 1024)
@@ -90,7 +92,7 @@ def configurar_perfil(gestor, anti_fingerprint_activo=None):
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
 
-    return perfil
+    return perfil, interceptor
 
 
 # ---------- VENTANA PRINCIPAL ----------
@@ -129,13 +131,25 @@ class MiNavegador(QMainWindow):
         # Modo incógnito.
         self.es_incognito = es_incognito
         self.perfil_web = perfil_web
-        self.interceptor_actual = (
-            interceptor_propio if interceptor_propio is not None else interceptor
-        )
+        # Si no se pasa interceptor_propio, se crea uno nuevo (para ventana normal).
+        # En incógnito siempre se pasa uno propio desde ventana_incognito.py.
+        self.interceptor_actual = interceptor_propio
 
         self.motor_actual = prefs.get(
             "motor_busqueda", motores.motor_por_defecto()
         )
+
+        # Si no hay interceptor propio (ventana normal), creamos uno para este perfil.
+        if self.interceptor_actual is None:
+            from privacidad.bloqueador import Bloqueador
+            perfil_para_interceptor = (perfil_web if perfil_web is not None
+                                       else perfil_persistente())
+            self.interceptor_actual = Bloqueador(
+                gestor,
+                privacidad=anti_fingerprint.esta_activo(perfil_para_interceptor),
+                ua=perfil_para_interceptor.httpUserAgent(),
+            )
+            perfil_para_interceptor.setUrlRequestInterceptor(self.interceptor_actual)
 
         # Las descargas del perfil de ESTA ventana (normal o incógnito)
         # las gestiona esta ventana, con SUS modelos.
@@ -780,11 +794,21 @@ class MiNavegador(QMainWindow):
             return
 
         if texto.startswith(("http://", "https://")):
-            view.setUrl(QUrl(texto))
+            qurl = QUrl(texto)
+            if qurl.isValid() and qurl.scheme() in ("http", "https"):
+                view.setUrl(qurl)
+            else:
+                self.statusBar().showMessage("URL inválida", 3000)
             return
 
-        if "." in texto and " " not in texto:
-            view.setUrl(QUrl("https://" + texto))
+        # Heurística: parece un dominio (tiene punto, sin espacios, no es IP sola).
+        # Validamos con QUrl para evitar javascript:, data:, file:, etc.
+        if "." in texto and " " not in texto and not texto.replace(".", "").isdigit():
+            qurl = QUrl("https://" + texto)
+            if qurl.isValid() and qurl.scheme() in ("http", "https"):
+                view.setUrl(qurl)
+            else:
+                self.statusBar().showMessage("Dirección inválida", 3000)
             return
 
         # Si el motor elegido no responde (red que corta ese dominio), se busca
