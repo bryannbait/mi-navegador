@@ -20,18 +20,10 @@ from PyQt6.QtWebEngineCore import (
 )
 
 from privacidad.bloqueador import Bloqueador
-from interfaz.ventana_historial import VentanaHistorial
-from interfaz.ventana_favoritos import VentanaFavoritos
-from interfaz.ventana_descargas import VentanaDescargas
 from privacidad import anti_fingerprint
-from interfaz.atajos_vim import VimKeys
-from interfaz.atajos_tabla import ATAJOS_GLOBALES
-from interfaz.barra_busqueda import BarraBusqueda
 from interfaz.puente_vim import PaginaVim, crear_script_vim
-from interfaz.modo_lectura import generar_css, JS_BUSCAR_ARTICULO, js_literal
 from interfaz.pestanas import Pestanas
 from interfaz import pagina_inicio
-from interfaz import pagina_privacidad
 from assets.icons.helpers import icono
 from modelos import motores
 from modelos import busqueda
@@ -288,6 +280,7 @@ class MiNavegador(QMainWindow):
         self.barra_fav.setMovable(False)
 
         # --- Buscar en la página (Ctrl+F) ---
+        from interfaz.barra_busqueda import BarraBusqueda
         self.busqueda = BarraBusqueda(self)
         self.busqueda.buscar.connect(self._buscar_en_pagina)
         self.busqueda.cerrada.connect(self._limpiar_busqueda)
@@ -335,6 +328,7 @@ class MiNavegador(QMainWindow):
         self._timer_escudo.timeout.connect(self.actualizar_escudo)
 
         # Vim.
+        from interfaz.atajos_vim import VimKeys
         self.vim = VimKeys(self)
 
         self._crear_atajos()
@@ -590,6 +584,7 @@ class MiNavegador(QMainWindow):
     def _obtener_panel_descargas(self):
         # Sin ventana padre: así no se destruye si se cierra otra ventana.
         if self._panel_descargas is None:
+            from interfaz.ventana_descargas import VentanaDescargas
             self._panel_descargas = VentanaDescargas(
                 self.descargas, abrir_url=self._abrir_en_pestana_nueva
             )
@@ -919,6 +914,7 @@ class MiNavegador(QMainWindow):
 
     def abrir_privacidad(self):
         """Abre la página local que muestra lo que una web ve de nosotros."""
+        from interfaz import pagina_privacidad
         activo = anti_fingerprint.esta_activo(self._perfil_actual())
         view = self.nueva_pestana()
         view.setHtml(pagina_privacidad.generar_html(activo))
@@ -1039,6 +1035,7 @@ class MiNavegador(QMainWindow):
         self._refrescar_favoritos()
 
     def _abrir_ventana_favoritos(self):
+        from interfaz.ventana_favoritos import VentanaFavoritos
         dlg = VentanaFavoritos(self.favoritos, self)
         if dlg.exec() and dlg.url_seleccionada:
             self._abrir_en_actual(dlg.url_seleccionada)
@@ -1076,6 +1073,7 @@ class MiNavegador(QMainWindow):
             v.setUrl(QUrl(url))
 
     def _abrir_ventana_historial(self):
+        from interfaz.ventana_historial import VentanaHistorial
         dlg = VentanaHistorial(self.historial, self)
         if dlg.exec() and dlg.url_seleccionada:
             self._abrir_en_actual(dlg.url_seleccionada)
@@ -1437,6 +1435,7 @@ class MiNavegador(QMainWindow):
 
     def _js_activar_lectura(self):
         """JS inline que busca el artículo y lo muestra en un overlay."""
+        from interfaz.modo_lectura import generar_css, JS_BUSCAR_ARTICULO, js_literal
         css = js_literal(generar_css())
         return (
             "(function(){"
@@ -1819,6 +1818,7 @@ class MiNavegador(QMainWindow):
     # ---------- ATAJOS ----------
 
     def _crear_atajos(self):
+        from interfaz.atajos_tabla import ATAJOS_GLOBALES
         for atajo in ATAJOS_GLOBALES:
             secuencia, metodo = atajo[0], atajo[1]
             argumento = atajo[2] if len(atajo) > 2 else None
