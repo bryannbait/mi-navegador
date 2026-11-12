@@ -3,7 +3,7 @@
 
 import unittest
 
-import pagina_inicio
+from interfaz import pagina_inicio
 
 
 class PaginaInicioTest(unittest.TestCase):

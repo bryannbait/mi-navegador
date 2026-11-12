@@ -19,14 +19,14 @@ from PyQt6.QtWebEngineCore import (
 )
 
 from privacidad.bloqueador import Bloqueador
-from ventana_historial import VentanaHistorial
-from ventana_favoritos import VentanaFavoritos
-from ventana_descargas import VentanaDescargas
+from interfaz.ventana_historial import VentanaHistorial
+from interfaz.ventana_favoritos import VentanaFavoritos
+from interfaz.ventana_descargas import VentanaDescargas
 from privacidad import anti_fingerprint
-from atajos_vim import VimKeys
-from puente_vim import PaginaVim, crear_script_vim
-from pestanas import Pestanas
-import pagina_inicio
+from interfaz.atajos_vim import VimKeys
+from interfaz.puente_vim import PaginaVim, crear_script_vim
+from interfaz.pestanas import Pestanas
+from interfaz import pagina_inicio
 from assets.icons.helpers import icono
 from modelos import motores
 import config
@@ -327,7 +327,7 @@ class MiNavegador(QMainWindow):
 
     def abrir_incognito(self):
         """Abre una nueva ventana en modo incógnito."""
-        from ventana_incognito import VentanaIncognito
+        from interfaz.ventana_incognito import VentanaIncognito
 
         app = QApplication.instance()
         if not hasattr(app, "_ventanas_incognito"):

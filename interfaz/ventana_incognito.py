@@ -9,7 +9,7 @@ from privacidad import anti_fingerprint
 import config
 from privacidad.bloqueador import Bloqueador
 from navegador import MiNavegador
-from puente_vim import crear_script_vim
+from .puente_vim import crear_script_vim
 from modelos.historial import Historial
 from modelos.favoritos import Favoritos
 from modelos.descargas import Descargas
