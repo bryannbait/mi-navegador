@@ -379,8 +379,13 @@ class MiNavegador(QMainWindow):
     def _obtener_panel_descargas(self):
         # Sin ventana padre: así no se destruye si se cierra otra ventana.
         if self._panel_descargas is None:
-            self._panel_descargas = VentanaDescargas(self.descargas)
+            self._panel_descargas = VentanaDescargas(
+                self.descargas, abrir_url=self._abrir_en_pestana_nueva
+            )
         return self._panel_descargas
+
+    def _abrir_en_pestana_nueva(self, url):
+        self.nueva_pestana(url)
 
     def abrir_panel_descargas(self):
         panel = self._obtener_panel_descargas()
@@ -390,7 +395,7 @@ class MiNavegador(QMainWindow):
 
     def _notificar_descarga(self, nombre, ruta):
         self.statusBar().showMessage(
-            f"📥 Descargando: {nombre}  →  {ruta}", 5000
+            f"Descargando: {nombre}  →  {ruta}", 5000
         )
 
     # ---------- MOTOR DE BÚSQUEDA ----------
