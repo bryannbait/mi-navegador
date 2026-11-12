@@ -7,10 +7,10 @@ import unittest
 
 from privacidad import gestor_bloqueo
 import rutas
-from descargas import RUTA as RUTA_DESCARGAS
-from favoritos import RUTA as RUTA_FAVORITOS
-from historial import RUTA as RUTA_HISTORIAL
-from preferencias import RUTA as RUTA_PREFERENCIAS
+from modelos.descargas import RUTA as RUTA_DESCARGAS
+from modelos.favoritos import RUTA as RUTA_FAVORITOS
+from modelos.historial import RUTA as RUTA_HISTORIAL
+from modelos.preferencias import RUTA as RUTA_PREFERENCIAS
 
 
 class RutasTest(unittest.TestCase):

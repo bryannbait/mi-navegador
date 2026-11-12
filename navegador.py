@@ -28,7 +28,7 @@ from puente_vim import PaginaVim, crear_script_vim
 from pestanas import Pestanas
 import pagina_inicio
 from assets.icons.helpers import icono
-import motores
+from modelos import motores
 import config
 
 

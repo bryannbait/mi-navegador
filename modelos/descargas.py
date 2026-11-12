@@ -4,7 +4,7 @@
 import os
 from datetime import datetime
 
-from modelo_json import ModeloJSON
+from .modelo_json import ModeloJSON
 from rutas import RUTA_DATOS
 
 

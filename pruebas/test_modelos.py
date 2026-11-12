@@ -9,11 +9,11 @@ import os
 import tempfile
 import unittest
 
-from descargas import Descargas
-from favoritos import Favoritos
-from historial import Historial, MAX_ENTRADAS
-from modelo_json import ModeloJSON
-from preferencias import Preferencias
+from modelos.descargas import Descargas
+from modelos.favoritos import Favoritos
+from modelos.historial import Historial, MAX_ENTRADAS
+from modelos.modelo_json import ModeloJSON
+from modelos.preferencias import Preferencias
 
 
 class ModelosTest(unittest.TestCase):

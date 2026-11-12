@@ -28,10 +28,10 @@ except ImportError:
     sys.exit(1)
 
 from privacidad.gestor_bloqueo import GestorBloqueo
-from historial import Historial
-from favoritos import Favoritos
-from descargas import Descargas
-from preferencias import Preferencias
+from modelos.historial import Historial
+from modelos.favoritos import Favoritos
+from modelos.descargas import Descargas
+from modelos.preferencias import Preferencias
 from navegador import MiNavegador, configurar_perfil
 from estilos import aplicar_tema
 import config
