@@ -5,9 +5,6 @@
 NOMBRE = "MiNavegador"
 VERSION = "1.4"
 
-# --- Página de inicio del motor (Ctrl+clic en el botón del motor) ---
-HOME = "https://duckduckgo.com"
-
 # --- Paleta del tema: oscuro sobrio + acento violeta ---
 # Cambia COLOR_ACENTO* y todo el navegador cambia de color de acento.
 COLOR_FONDO         = "#0e0e13"   # fondo general (detrás de las páginas)

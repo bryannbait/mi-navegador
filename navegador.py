@@ -448,51 +448,6 @@ class MiNavegador(QMainWindow):
                       f"red; las búsquedas usarán "
                       f"{busqueda.nombre(self._motor_efectivo())}.", flush=True)
 
-    def _precargar_motor(self, clave):
-        """Carga la home del motor en una vista oculta para calentar la conexión.
-
-        Esto hace que la primera búsqueda del usuario sea instantánea porque:
-        - DNS ya resuelto
-        - TCP/TLS handshake ya hecho
-        - Socket pool de Chromium caliente
-        - Posible HSTS/HPKP cacheado
-
-        La vista se destruye sola al terminar (deleteLater).
-        NOTA: Actualmente no se usa (desactivada por causar efectos laterales).
-        """
-        motor = motores.obtener(clave)
-        url_home = motor.get("url_home")
-        if not url_home:
-            return
-
-        # Evitar precargas duplicadas simultáneas
-        if getattr(self, f"_precarga_{clave}", None) is not None:
-            return
-
-        view = QWebEngineView()
-        # No mostrar, no añadir a pestañas, sin foco
-        view.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        view.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-        view.resize(1, 1)
-        view.move(-10000, -10000)
-
-        # Usar el mismo perfil que las pestañas reales
-        perfil = (self.perfil_web if self.perfil_web is not None
-                  else perfil_persistente())
-        page = PaginaVim(perfil, view)
-        view.setPage(page)
-
-        def _fin(ok):
-            # Limpiar referencia para permitir otra precarga futura
-            setattr(self, f"_precarga_{clave}", None)
-            view.deleteLater()
-            if ok:
-                print(f"[Búsqueda] {busqueda.nombre(clave)} precargado.", flush=True)
-
-        setattr(self, f"_precarga_{clave}", view)
-        view.loadFinished.connect(_fin)
-        view.setUrl(QUrl(url_home))
-
     @staticmethod
     def _motor_responde(reply):
         """True si la petición llegó a un servidor, aunque responda un error."""
@@ -705,6 +660,8 @@ class MiNavegador(QMainWindow):
         # Elección explícita del usuario: se respeta aunque ese motor hubiera
         # pedido CAPTCHA hace un momento (quizá quiera resolverlo).
         self._reto_hasta.pop(clave, None)
+        # También limpiar _reto_visto para que no bloquee reintentos inmediatos.
+        self._reto_visto.clear()
         # Motor recién elegido: puede que ahora sí responda (o que no).
         self._motor_comprobado = 0.0
         self._comprobar_motor(clave)
@@ -1375,6 +1332,10 @@ class MiNavegador(QMainWindow):
 
     def _guardar_sesion(self):
         pestanas, activa = self._estado_sesion()
+        # Avisar si se pierden pestañas por el límite de 30.
+        if len(pestanas) > 30:
+            self.statusBar().showMessage(
+                f"Sesión guardada: solo se restaurarán las primeras 30 de {len(pestanas)} pestañas.", 8000)
         self.sesion.guardar(pestanas, activa)
 
     def _restaurar_sesion(self):
@@ -1693,22 +1654,12 @@ class MiNavegador(QMainWindow):
         return self.sender() is self.pestana_actual()
 
     def _on_url_changed(self, qurl):
+        view = self.sender()
         if self._es_actual():
             self.barra.setText(self._texto_url(qurl))
             self._actualizar_candado(qurl)
             self._actualizar_estrella()
             self._actualizar_navegacion()
-
-        # Cambio de sitio: aplico el zoom guardado del nuevo host.
-        view = self.sender()
-        if isinstance(view, QWebEngineView):
-            host = host_de(qurl)
-            previo = self._zoom_host_por_view.get(id(view))
-            if host and previo != host:
-                self._zoom_host_por_view[id(view)] = host
-                if (not self.es_incognito
-                        and host not in self._zoom_tocado_sesion):
-                    self._zoom_aplicar_vista(view)
 
         # Nueva URL: sale del modo lectura de la página anterior.
         if isinstance(view, QWebEngineView):
@@ -1729,6 +1680,17 @@ class MiNavegador(QMainWindow):
             self.progreso.setValue(0)
             self.progreso.show()
             self._poner_icono_recargar(True)
+
+        # Capturar el host de destino al iniciar la carga (antes de redirecciones).
+        # Así el zoom se asocia al sitio que el usuario quiso visitar.
+        view = self.sender()
+        if isinstance(view, QWebEngineView):
+            host = host_de(view.url())
+            if host:
+                self._zoom_host_por_view[id(view)] = host
+                if (not self.es_incognito
+                        and host not in self._zoom_tocado_sesion):
+                    self._zoom_aplicar_vista(view)
 
     def _on_load_progress(self, valor):
         if self._es_actual():
@@ -1856,7 +1818,9 @@ class MiNavegador(QMainWindow):
         self._respaldo_hecho.add(marca)
         self._motores_caidos.add(clave)
 
-        consulta = busqueda.consulta_de_reto(qurl.query())
+        # En un fallo de carga normal (no CAPTCHA), la query está en ?q=...
+        # consulta_de_reto() busca ?continue= y fallaría aquí.
+        consulta = busqueda.consulta_de(qurl.query())
         motor = motores.obtener(destino)
         if consulta:
             url, _ = busqueda.url_busqueda(destino, consulta)
