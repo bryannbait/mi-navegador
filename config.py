@@ -63,6 +63,10 @@ CHROMIUM_FLAGS = [
     "--enable-gpu-rasterization",
     "--enable-native-gpu-memory-buffers",
     "--disable-background-timer-throttling",
+    # Solo errores fatales en la consola. Los fallos de red esperados (por
+    # ejemplo un motor de búsqueda bloqueado por la red) ya se explican con
+    # nuestro propio mensaje; el ruido de Chromium solo asusta.
+    "--log-level=3",
 ]
 
 # --- Motor de búsqueda de respaldo ---

@@ -388,6 +388,8 @@ class MiNavegador(QMainWindow):
                 self._motores_caidos.discard(clave)
                 self._actualizar_icono_motor()
                 self._refrescar_inicios()
+                print(f"[Búsqueda] {busqueda.nombre(clave)} responde de nuevo.",
+                      flush=True)
             return
 
         if clave not in self._motores_caidos:
@@ -399,6 +401,11 @@ class MiNavegador(QMainWindow):
                     f"Las búsquedas usarán {busqueda.nombre(self._motor_efectivo())}.",
                     8000)
                 self._refrescar_inicios()
+                # Aviso legible en la consola: los errores de red de Chromium
+                # quedan silenciados (ver config.CHROMIUM_FLAGS).
+                print(f"[Búsqueda] {busqueda.nombre(clave)} no responde en tu "
+                      f"red; las búsquedas usarán "
+                      f"{busqueda.nombre(self._motor_efectivo())}.", flush=True)
 
     @staticmethod
     def _motor_responde(reply):
@@ -1702,6 +1709,8 @@ class MiNavegador(QMainWindow):
         self.statusBar().showMessage(
             f"{busqueda.nombre(clave)} no responde en tu red: "
             f"seguimos con {busqueda.nombre(destino)}.", 8000)
+        print(f"[Búsqueda] {busqueda.nombre(clave)} no responde; "
+              f"reintentando con {busqueda.nombre(destino)}.", flush=True)
 
         # Diferido: navegar en pleno manejo de loadFinished es frágil.
         QTimer.singleShot(0, lambda: view.setUrl(QUrl(url)))
