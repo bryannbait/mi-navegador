@@ -3,6 +3,7 @@
 
 import os
 import json
+import time
 from urllib.parse import quote, urlparse
 
 from PyQt6.QtWidgets import (
@@ -12,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QUrl, Qt, QStringListModel, QTimer, QSize
 from PyQt6.QtGui import QAction, QKeySequence
-from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply, QSslConfiguration, QSslSocket
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEnginePage
@@ -33,6 +34,7 @@ from interfaz import pagina_inicio
 from interfaz import pagina_privacidad
 from assets.icons.helpers import icono
 from modelos import motores
+from modelos import busqueda
 from modelos.sesion import Sesion, ordenar_fijadas
 from modelos.zoom import (
     Zoom, host_de, FACTOR_DEFECTO, pasar_a_puntos,
@@ -53,30 +55,6 @@ def url_a_texto(qurl):
 
 def configurar_perfil(gestor, anti_fingerprint_activo=None):
     global interceptor
-
-    # --- SSL: asegurar que QtWebEngine use los certificados del sistema Windows ---
-
-    ssl_ok = QSslSocket.supportsSsl()
-    ca_certs = []
-    if hasattr(QSslSocket, "defaultCaCertificates"):
-        ca_certs = QSslSocket.defaultCaCertificates()
-
-    print(f"[SSL] soporte SSL: {ssl_ok}")
-    print(f"[SSL] certificados CA del sistema: {len(ca_certs)}")
-    print(f"[SSL] librería compilada: {QSslSocket.sslLibraryBuildVersionString()}")
-    print(f"[SSL] librería en ejecución: {QSslSocket.sslLibraryVersionString()}")
-
-    if not ssl_ok:
-        print("[SSL] ADVERTENCIA: Qt no tiene soporte SSL. Faltan DLLs de OpenSSL en el entorno.")
-        print("[SSL] Solución: instalar pyopenssl o copiar libssl/libcrypto al venv.")
-
-    # Configurar la configuración SSL por defecto con certificados del sistema
-    ssl_config = QSslConfiguration.defaultConfiguration()
-    ssl_config.setPeerVerifyMode(QSslSocket.PeerVerifyMode.VerifyPeer)
-    if ca_certs:
-        ssl_config.setCaCertificates(ca_certs)
-    QSslConfiguration.setDefaultConfiguration(ssl_config)
-
     perfil = QWebEngineProfile.defaultProfile()
     anti_fingerprint.preparar_perfil(perfil, anti_fingerprint_activo)
     perfil.setHttpCacheMaximumSize(50 * 1024 * 1024)
@@ -173,6 +151,13 @@ class MiNavegador(QMainWindow):
         # --- Red para sugerencias ---
         self.net = QNetworkAccessManager(self)
         self.reply_sugerencias = None
+
+        # --- Motor de búsqueda: si el elegido no responde, se usa el respaldo ---
+        # Claves de los motores que han fallado en esta sesión (no se persiste).
+        self._motores_caidos = set()
+        self._respaldo_hecho = set()
+        self._reply_motor = None
+        self._motor_comprobado = 0.0
 
         # --- Barra de direcciones (píldora con candado y estrella dentro) ---
         self.barra = QLineEdit()
@@ -342,6 +327,99 @@ class MiNavegador(QMainWindow):
         else:
             self.nueva_pestana()
 
+        # Comprobar en segundo plano si el motor de búsqueda responde. En
+        # incógnito no hace falta: no se guarda ningún estado de esta sonda.
+        if not self.es_incognito:
+            QTimer.singleShot(1500, self._comprobar_motor)
+
+    # ---------- MOTOR DE BÚSQUEDA: DISPONIBILIDAD ----------
+
+    def _motor_efectivo(self):
+        """Clave del motor que se usará ahora mismo (respaldo si hace falta)."""
+        return busqueda.elegir(self.motor_actual, self._motores_caidos)
+
+    def _usando_respaldo(self):
+        return self._motor_efectivo() != self.motor_actual
+
+    def _comprobar_motor(self, clave=None):
+        """Pregunta al motor si responde. Si no, lo marca como caído.
+
+        Se lanza al arrancar, al cambiar de motor y de vez en cuando. Nunca
+        bloquea la interfaz: la respuesta llega por señal. Cualquier fallo de
+        esta comprobación (red rara, servidor que rechaza HEAD) se ignora: es
+        solo un diagnóstico, no debe tumbar el navegador.
+        """
+        try:
+            clave = clave or self.motor_actual
+            if self._reply_motor is not None:
+                return
+            motor = motores.obtener(clave)
+            url = motor.get("url_home") or motor["url_busqueda"].format(q="")
+
+            peticion = QNetworkRequest(QUrl(url))
+            # Sin caché: interesa saber si la red llega, no lo que hubiera
+            # guardado de antes.
+            peticion.setAttribute(
+                QNetworkRequest.Attribute.CacheLoadControlAttribute,
+                QNetworkRequest.CacheLoadControl.AlwaysNetwork)
+            peticion.setTransferTimeout(6000)
+            self._reply_motor = self.net.head(peticion)
+            self._reply_motor.finished.connect(
+                lambda r=None, c=clave: self._on_motor_comprobado(
+                    c, r or self._reply_motor)
+            )
+        except Exception:
+            self._reply_motor = None
+            self._motor_comprobado = time.monotonic()
+
+    def _on_motor_comprobado(self, clave, reply):
+        self._reply_motor = None
+        self._motor_comprobado = time.monotonic()
+        try:
+            responde = self._motor_responde(reply)
+        except Exception:
+            responde = True  # ante la duda, no cambiar de motor
+        finally:
+            if reply is not None:
+                reply.deleteLater()
+
+        if responde:
+            if clave in self._motores_caidos:
+                self._motores_caidos.discard(clave)
+                self._actualizar_icono_motor()
+                self._refrescar_inicios()
+            return
+
+        if clave not in self._motores_caidos:
+            self._motores_caidos.add(clave)
+            if clave == self.motor_actual:
+                self._actualizar_icono_motor()
+                self.statusBar().showMessage(
+                    f"{busqueda.nombre(clave)} no responde en tu red. "
+                    f"Las búsquedas usarán {busqueda.nombre(self._motor_efectivo())}.",
+                    8000)
+                self._refrescar_inicios()
+
+    @staticmethod
+    def _motor_responde(reply):
+        """True si la petición llegó a un servidor, aunque responda un error."""
+        if reply.error() == QNetworkReply.NetworkError.NoError:
+            return True
+        # Un 4xx/5xx significa que el dominio SÍ responde (p. ej. un 405
+        # porque el servidor no acepta HEAD).
+        estado = reply.attribute(
+            QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+        return bool(estado)
+
+    def _refrescar_inicios(self):
+        """Rehace las páginas de inicio abiertas con el motor que toca ahora."""
+        for i in range(self.tabs.count()):
+            view = self.tabs.widget(i)
+            if not isinstance(view, QWebEngineView):
+                continue
+            if self._es_url_vacia(view.url()):
+                view.setHtml(self._html_inicio())
+
     # ---------- AYUDAS DE INTERFAZ ----------
 
     def _boton_icono(self, nombre, tooltip, slot):
@@ -358,7 +436,7 @@ class MiNavegador(QMainWindow):
     def _html_inicio(self):
         favs = [] if self.es_incognito else self.favoritos.todos()
         return pagina_inicio.generar_html(
-            favs, motores.obtener(self.motor_actual)["nombre"], self.es_incognito)
+            favs, busqueda.nombre(self._motor_efectivo()), self.es_incognito)
 
     @staticmethod
     def _es_url_vacia(qurl):
@@ -499,7 +577,14 @@ class MiNavegador(QMainWindow):
         motor = motores.obtener(self.motor_actual)
         self.btn_motor.setText(motor["icono"])
         self.btn_motor.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_motor.setToolTip(f"Motor: {motor['nombre']} (clic para cambiar)")
+        if self._usando_respaldo():
+            self.btn_motor.setToolTip(
+                f"Motor: {motor['nombre']} (no responde en tu red)"
+                f"  ·  usando {busqueda.nombre(self._motor_efectivo())}"
+                "  ·  clic para cambiar")
+        else:
+            self.btn_motor.setToolTip(
+                f"Motor: {motor['nombre']} (clic para cambiar)")
 
     def _mostrar_menu_motores(self):
         menu = QMenu(self)
@@ -523,6 +608,9 @@ class MiNavegador(QMainWindow):
         self.motor_actual = clave
         self.prefs.set("motor_busqueda", clave)
         self._actualizar_icono_motor()
+        # Motor recién elegido: puede que ahora sí responda (o que no).
+        self._motor_comprobado = 0.0
+        self._comprobar_motor(clave)
 
         if ir_a_home:
             motor = motores.obtener(clave)
@@ -616,8 +704,18 @@ class MiNavegador(QMainWindow):
             view.setUrl(QUrl("https://" + texto))
             return
 
-        motor = motores.obtener(self.motor_actual)
-        url = motor["url_busqueda"].format(q=quote(texto))
+        # Si el motor elegido no responde (red que corta ese dominio), se busca
+        # con el de respaldo y se avisa. La comprobación se refresca cada 5
+        # minutos para que se recupere solo cuando la red lo permita.
+        if time.monotonic() - self._motor_comprobado > 300:
+            self._comprobar_motor()
+
+        url, clave = busqueda.url_busqueda(
+            self.motor_actual, texto, self._motores_caidos)
+        if clave != self.motor_actual:
+            self.statusBar().showMessage(
+                f"{busqueda.nombre(self.motor_actual)} no responde: "
+                f"buscando en {busqueda.nombre(clave)}...", 5000)
         view.setUrl(QUrl(url))
 
     def recargar_o_detener(self):
@@ -1548,6 +1646,65 @@ class MiNavegador(QMainWindow):
             if isinstance(view, QWebEngineView) and not self._es_url_vacia(view.url()):
                 self.historial.añadir(view.title(), url_a_texto(view.url()))
                 self._zoom_aplicar_vista(view)
+
+        if not ok:
+            self._reintentar_con_respaldo(self.sender())
+
+    def _reintentar_con_respaldo(self, view):
+        """Si falló la carga de una URL del motor de búsqueda, reintenta la
+        misma búsqueda con el motor de respaldo.
+
+        Cubre el caso de que la sonda inicial dijera que el motor va bien y la
+        red lo corte después (o un corte intermitente).
+        """
+        try:
+            self._reintentar_con_respaldo_seguro(view)
+        except Exception:
+            # Nunca dejar que un fallo al reintentar cierre la ventana.
+            pass
+
+    def _reintentar_con_respaldo_seguro(self, view):
+        if not isinstance(view, QWebEngineView):
+            return
+        qurl = view.url()
+        clave = busqueda.clave_por_host(qurl.host())
+        if clave is None:
+            return
+
+        # Una sola reintento por pestaña y URL: si el respaldo también falla,
+        # no nos quedamos en un bucle de recargas.
+        marca = (id(view), qurl.toString())
+        if marca in self._respaldo_hecho:
+            return
+
+        # Ojo: no basta con mirar self._motores_caidos. Puede que la sonda ya
+        # haya marcado el motor como caído mientras esta pestaña cargaba; en
+        # ese caso también hay que reintentar.
+        caidos = set(self._motores_caidos) | {clave}
+        destino = busqueda.elegir(clave, caidos)
+        if destino == clave:
+            return
+
+        self._respaldo_hecho.add(marca)
+        self._motores_caidos.add(clave)
+
+        consulta = busqueda.consulta_de(qurl.query())
+        motor = motores.obtener(destino)
+        if consulta:
+            url, _ = busqueda.url_busqueda(destino, consulta)
+        else:
+            url = motor.get("url_home")
+
+        self._actualizar_icono_motor()
+        if not url:
+            return
+
+        self.statusBar().showMessage(
+            f"{busqueda.nombre(clave)} no responde en tu red: "
+            f"seguimos con {busqueda.nombre(destino)}.", 8000)
+
+        # Diferido: navegar en pleno manejo de loadFinished es frágil.
+        QTimer.singleShot(0, lambda: view.setUrl(QUrl(url)))
 
     # ---------- TECLADO ----------
 

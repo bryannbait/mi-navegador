@@ -63,5 +63,10 @@ CHROMIUM_FLAGS = [
     "--enable-gpu-rasterization",
     "--enable-native-gpu-memory-buffers",
     "--disable-background-timer-throttling",
-    "--ignore-certificate-errors",
 ]
+
+# --- Motor de búsqueda de respaldo ---
+# Si el motor elegido no responde (red que corta ese dominio, caída del
+# servicio...), las búsquedas se hacen con este en vez de fallar. Se avisa en
+# la barra de estado. Pon None para desactivar el respaldo.
+MOTOR_RESPALDO = "duckduckgo"

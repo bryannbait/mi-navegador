@@ -1,0 +1,72 @@
+# busqueda.py
+# Elige con qué motor se hace una búsqueda cuando el elegido no responde.
+#
+# Hay redes (y algunos proveedores) que cortan un dominio concreto: la
+# conexión se reinicia en pleno saludo TLS y ningún navegador puede cargarlo
+# (le pasa igual a Brave, Chrome o al nuestro). En vez de dejar la búsqueda
+# muerta, se usa el motor de respaldo de config y se avisa en la barra de
+# estado.
+#
+# Este módulo es lógica pura (sin Qt) para poder probarlo sin abrir ventanas.
+
+from urllib.parse import parse_qs, quote
+
+import config
+from modelos import motores
+
+
+def nombre(clave):
+    """Nombre visible de un motor (o la propia clave si no existe)."""
+    motor = motores.MOTORES.get(clave)
+    return motor["nombre"] if motor else str(clave)
+
+
+def elegir(motor_actual, caidos):
+    """Clave del motor que se usará de verdad.
+
+    Si el elegido está caído se usa config.MOTOR_RESPALDO. Si tampoco hay
+    respaldo utilizable, se devuelve el original: es mejor intentarlo que
+    no buscar nada.
+    """
+    if motor_actual not in caidos:
+        return motor_actual
+
+    respaldo = config.MOTOR_RESPALDO
+    if respaldo and respaldo != motor_actual and respaldo not in caidos:
+        return respaldo
+    return motor_actual
+
+
+def url_busqueda(motor_actual, consulta, caidos=()):
+    """Devuelve (url, clave_usada) para buscar la consulta."""
+    clave = elegir(motor_actual, caidos)
+    url = motores.obtener(clave)["url_busqueda"].format(q=quote(consulta))
+    return url, clave
+
+
+def host_de(plantilla):
+    """Host de una plantilla de URL ('https://x.com/?q={q}' -> 'x.com')."""
+    resto = plantilla.split("://", 1)[-1]
+    return resto.split("/", 1)[0].split("?", 1)[0].lower()
+
+
+def clave_por_host(host, catalogo=None):
+    """Qué motor corresponde a ese host, o None si es un sitio cualquiera."""
+    host = (host or "").lower()
+    if not host:
+        return None
+    for clave, motor in (catalogo or motores.MOTORES).items():
+        for campo in ("url_home", "url_busqueda", "url_sugerencias"):
+            plantilla = motor.get(campo)
+            if plantilla and host_de(plantilla) == host:
+                return clave
+    return None
+
+
+def consulta_de(query):
+    """Saca el término buscado de la query de una URL de resultados."""
+    valores = parse_qs((query or "").lstrip("?"))
+    for campo in ("q", "query"):
+        if valores.get(campo):
+            return valores[campo][0]
+    return ""
