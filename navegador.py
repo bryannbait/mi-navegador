@@ -15,7 +15,7 @@ from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
-    QWebEngineProfile, QWebEngineSettings
+    QWebEngineProfile, QWebEngineSettings, QWebEnginePage
 )
 
 from privacidad.bloqueador import Bloqueador
@@ -24,6 +24,8 @@ from interfaz.ventana_favoritos import VentanaFavoritos
 from interfaz.ventana_descargas import VentanaDescargas
 from privacidad import anti_fingerprint
 from interfaz.atajos_vim import VimKeys
+from interfaz.atajos_tabla import ATAJOS_GLOBALES
+from interfaz.barra_busqueda import BarraBusqueda
 from interfaz.puente_vim import PaginaVim, crear_script_vim
 from interfaz.pestanas import Pestanas
 from interfaz import pagina_inicio
@@ -95,6 +97,9 @@ class MiNavegador(QMainWindow):
         # Las descargas del perfil de ESTA ventana (normal o incógnito)
         # las gestiona esta ventana, con SUS modelos.
         self._panel_descargas = None
+
+        # Pestañas cerradas recientes (Ctrl+Shift+T). Solo en memoria.
+        self._cerradas = []
         perfil = (perfil_web if perfil_web is not None
                   else QWebEngineProfile.defaultProfile())
         perfil.downloadRequested.connect(self._descarga_solicitada)
@@ -197,6 +202,11 @@ class MiNavegador(QMainWindow):
         self.barra_fav.setObjectName("barra_favoritos")
         self.barra_fav.setMovable(False)
 
+        # --- Buscar en la página (Ctrl+F) ---
+        self.busqueda = BarraBusqueda(self)
+        self.busqueda.buscar.connect(self._buscar_en_pagina)
+        self.busqueda.cerrada.connect(self._limpiar_busqueda)
+
         # --- Cabecera (un solo bloque con el color del tema) ---
         self.chrome = QFrame()
         self.chrome.setObjectName("chrome")
@@ -206,6 +216,7 @@ class MiNavegador(QMainWindow):
         caja.setSpacing(0)
         caja.addLayout(fila_tabs)
         caja.addLayout(fila_nav)
+        caja.addWidget(self.busqueda)
         caja.addWidget(self.barra_fav)
 
         # --- Progreso (2 px; reserva su hueco para que la página no salte) ---
@@ -844,6 +855,7 @@ class MiNavegador(QMainWindow):
 
         page = PaginaVim(perfil, view)
         page.busqueda_pedida.connect(self._buscar_desde_inicio)
+        page.findTextFinished.connect(self._on_busqueda_terminada)
         view.setPage(page)
 
         view.urlChanged.connect(self._on_url_changed)
@@ -868,6 +880,8 @@ class MiNavegador(QMainWindow):
 
     def cerrar_pestana(self, idx):
         widget = self.tabs.widget(idx)
+        if widget is not None:
+            self._anotar_cerrada(widget.url())
         if widget is not None and self.interceptor_actual is not None:
             self.interceptor_actual.olvidar_pestana(id(widget))
         self.tabs.removeTab(idx)
@@ -875,6 +889,73 @@ class MiNavegador(QMainWindow):
             widget.deleteLater()
         if self.tabs.count() == 0:
             self.close()
+
+    def _anotar_cerrada(self, qurl):
+        """Guarda la URL para poder reabrirla con Ctrl+Shift+T.
+
+        Las páginas internas (inicio, about:) no se reabren: no hay nada que
+        restaurar.
+        """
+        if self._es_url_vacia(qurl) or qurl.scheme() not in ("http", "https", "file"):
+            return
+        self._cerradas.append(url_a_texto(qurl))
+        del self._cerradas[:-10]     # como mucho las 10 últimas
+
+    def reabrir_pestana_cerrada(self):
+        if not self._cerradas:
+            return
+        self.nueva_pestana(self._cerradas.pop())
+
+    def ir_a_pestana(self, idx):
+        """Ctrl+1..8 → esa pestaña; Ctrl+9 → la última (idx -1)."""
+        total = self.tabs.count()
+        if total == 0:
+            return
+        if idx < 0:
+            idx = total - 1
+        if 0 <= idx < total:
+            self.tabs.setCurrentIndex(idx)
+
+    def cerrar_ventana(self):
+        self.close()
+
+    def alternar_pantalla_completa(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    # ---------- BUSCAR EN LA PÁGINA ----------
+
+    def abrir_busqueda(self):
+        self.busqueda.abrir()
+
+    def _buscar_en_pagina(self, texto, atras=False):
+        view = self.pestana_actual()
+        if view is None:
+            return
+        if not texto:
+            view.page().findText("")
+            self.busqueda.limpiar_resultado()
+            return
+        banderas = (QWebEnginePage.FindFlag.FindBackward if atras
+                    else QWebEnginePage.FindFlag(0))
+        view.page().findText(texto, banderas)
+
+    def _limpiar_busqueda(self):
+        view = self.pestana_actual()
+        if view is not None:
+            view.page().findText("")
+
+    def _on_busqueda_terminada(self, resultado):
+        if not self.busqueda.esta_abierta():
+            return
+        if not self.busqueda.texto():
+            self.busqueda.limpiar_resultado()
+            return
+        self.busqueda.mostrar_resultado(
+            resultado.activeMatch(), resultado.numberOfMatches()
+        )
 
     def cerrar_pestana_actual(self):
         idx = self.tabs.currentIndex()
@@ -894,6 +975,9 @@ class MiNavegador(QMainWindow):
         self._actualizar_estrella()
         self._actualizar_navegacion()
         self.actualizar_escudo()
+        # La búsqueda abierta sigue en la pestaña nueva.
+        if self.busqueda.esta_abierta() and self.busqueda.texto():
+            self._buscar_en_pagina(self.busqueda.texto())
 
     # ---------- SEÑALES ----------
 
@@ -957,29 +1041,12 @@ class MiNavegador(QMainWindow):
     # ---------- ATAJOS ----------
 
     def _crear_atajos(self):
-        atajos = [
-            ("Ctrl+L", self.enfocar_barra),
-            ("Ctrl+K", self.enfocar_barra),
-            ("Ctrl+T", lambda: self.nueva_pestana()),
-            ("Ctrl+W", self.cerrar_pestana_actual),
-            ("Ctrl+Shift+N", self.abrir_incognito),
-            ("Ctrl+J", self.abrir_panel_descargas),
-            ("Ctrl+Tab", self.siguiente_pestana),
-            ("Ctrl+Shift+Tab", self.pestana_anterior),
-            ("Ctrl+H", self._abrir_ventana_historial),
-            ("Ctrl+D", self._toggle_favorito),
-            ("Ctrl+Shift+O", self._abrir_ventana_favoritos),
-            ("F5", self.recargar_o_detener),
-            ("Ctrl+R", self.recargar_o_detener),
-            ("Esc", self.detener_actual),
-            ("Alt+Left", self.atras_actual),
-            ("Alt+Right", self.adelante_actual),
-            ("Alt+Home", self.inicio_actual),
-        ]
-        for sec, fn in atajos:
+        for atajo in ATAJOS_GLOBALES:
+            secuencia, metodo = atajo[0], atajo[1]
+            argumento = atajo[2] if len(atajo) > 2 else None
             acc = QAction(self)
-            acc.setShortcut(QKeySequence(sec))
-            acc.triggered.connect(fn)
+            acc.setShortcut(QKeySequence(secuencia))
+            acc.triggered.connect(self._lanzar(metodo, argumento))
             self.addAction(acc)
 
         self.accion_ver_fav = QAction(self)
@@ -991,6 +1058,17 @@ class MiNavegador(QMainWindow):
         self.accion_ver_fav.toggled.connect(self._toggle_barra_favoritos)
         self.addAction(self.accion_ver_fav)
         self.barra_fav.setVisible(self.accion_ver_fav.isChecked())
+
+    def _lanzar(self, nombre, argumento=None):
+        """Devuelve una función sin argumentos para conectar a QAction.
+
+        Hace falta el envoltorio: `triggered` manda un bool y algunos métodos
+        (como ir_a_pestana) recibirían ese bool como si fuera su parámetro.
+        """
+        metodo = getattr(self, nombre)
+        if argumento is None:
+            return lambda: metodo()
+        return lambda: metodo(argumento)
 
     def _toggle_barra_favoritos(self, visible):
         self.barra_fav.setVisible(visible)
@@ -1007,6 +1085,10 @@ class MiNavegador(QMainWindow):
             self.tabs.setCurrentIndex((self.tabs.currentIndex() - 1) % n)
 
     def detener_actual(self):
+        # Si la barra de búsqueda está abierta, Esc la cierra primero.
+        if self.busqueda.esta_abierta():
+            self.busqueda.cerrar()
+            return
         v = self.pestana_actual()
         if v:
             v.stop()

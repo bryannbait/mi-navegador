@@ -97,6 +97,21 @@ def hoja_de_estilos():
     QLineEdit#barra_direcciones:hover {{ border-color: {t.COLOR_BORDE}; }}
     QLineEdit#barra_direcciones:focus {{ border: 1px solid {t.COLOR_ACENTO}; }}
 
+    /* ---- buscar en la página (Ctrl+F) ---- */
+    QWidget#barra_busqueda {{ background: transparent; }}
+    QLineEdit#campo_busqueda {{
+        border: 1px solid {t.COLOR_BORDE}; border-radius: 12px;
+        min-height: 26px; padding: 0 10px; font-size: 12px;
+    }}
+    QLineEdit#campo_busqueda:focus {{ border: 1px solid {t.COLOR_ACENTO}; }}
+    QPushButton#btn_busqueda {{
+        background: transparent; border: none; border-radius: 6px;
+    }}
+    QPushButton#btn_busqueda:hover {{
+        background-color: {t.COLOR_SUPERFICIE_2};
+    }}
+    QLabel#resultado_busqueda {{ font-size: 11px; }}
+
     /* ---- favoritos ---- */
     QToolBar#barra_favoritos {{
         background: transparent; border: none; padding: 0 8px 6px 8px; spacing: 4px;
