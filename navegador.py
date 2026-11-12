@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QUrl, Qt, QStringListModel, QTimer, QSize
 from PyQt6.QtGui import QAction, QKeySequence
-from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply, QSslConfiguration, QSslSocket
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEnginePage
@@ -76,6 +76,11 @@ def configurar_perfil(gestor, anti_fingerprint_activo=None):
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+
+    # --- SSL: ignorar certificados no válidos (evita SSL handshake failed en Windows) ---
+    QSslConfiguration.defaultConfiguration().setPeerVerifyMode(
+        QSslSocket.PeerVerifyMode.VerifyNone
+    )
 
     return perfil
 
