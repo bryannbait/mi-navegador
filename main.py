@@ -15,7 +15,7 @@ except ImportError:
     VENV = os.path.join(RAIZ, "venv", "Scripts", "python.exe")
     if (os.path.isfile(VENV)
             and os.path.normcase(os.path.abspath(sys.executable))
-            != os.path.normcase(os.path.abspath(VENV))):
+            != os.normcase(os.path.abspath(VENV))):
         # subprocess entrecomilla bien la ruta aunque tenga espacios
         # ("Projecto Navegador"); os.execv en Windows no lo hace.
         sys.exit(subprocess.call(
@@ -35,6 +35,13 @@ from modelos.preferencias import Preferencias
 from navegador import MiNavegador, configurar_perfil
 from estilos import aplicar_tema
 import config
+
+# --- Flags de Chromium para aceleración de hardware y rendimiento ---
+# Se deben definir ANTES de crear QApplication para que QtWebEngine los lea.
+os.environ.setdefault(
+    "QTWEBENGINE_CHROMIUM_FLAGS",
+    " ".join(config.CHROMIUM_FLAGS),
+)
 
 
 def main():

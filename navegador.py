@@ -70,6 +70,13 @@ def configurar_perfil(gestor, anti_fingerprint_activo=None):
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
     ajustes.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
+
+    # --- Rendimiento: aceleración de hardware y renderizado ---
+    ajustes.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+    ajustes.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
+    ajustes.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+    ajustes.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+
     return perfil
 
 
